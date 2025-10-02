@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:math' as math;
+import 'dart:async';
+import 'dart:convert';
 import '../services/gnss_service.dart';
 import '../services/mesh_network_service.dart';
 import '../services/collision_detection_service.dart';
@@ -27,34 +29,70 @@ class _NavigationScreenState extends State<NavigationScreen> {
   bool _showSafetyPanel = true;
   bool _showNetworkPanel = false;
 
+  Timer? _dataTimer;
+
   @override
   void initState() {
     super.initState();
     _initializeServices();
+    _startPeriodicDataTransfer();
+  }
+
+  void _startPeriodicDataTransfer() {
+    // Cancel any existing timer
+    _dataTimer?.cancel();
+
+    // Create a new timer that fires every second
+    _dataTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _sendData();
+    });
+  }
+
+  Future<void> _sendData() async {
+    if (_currentPosition == null) return;
+
+    final meshService = Provider.of<MeshNetworkService>(context, listen: false);
+
+    // Create position data from current position
+    final positionData = PositionData(
+      deviceId: '', // Device ID will be handled by the mesh service
+      timestamp: DateTime.now(),
+      latitude: _currentPosition!.latitude,
+      longitude: _currentPosition!.longitude,
+      accuracy: 0.0, // You might want to get this from your location service
+      speed: 0.0, // You might want to get this from your location service
+      heading: 0.0, // You might want to get this from your location service
+    );
+
+    // Broadcast position to connected devices
+    await meshService.broadcastPositionData(positionData);
   }
 
   /// Initialize all services
   Future<void> _initializeServices() async {
     final gnssService = Provider.of<GnssService>(context, listen: false);
     final meshService = Provider.of<MeshNetworkService>(context, listen: false);
-    final collisionService = Provider.of<CollisionDetectionService>(context, listen: false);
-    
+    final collisionService = Provider.of<CollisionDetectionService>(
+      context,
+      listen: false,
+    );
+
     // Initialize services
     await gnssService.initialize();
     await meshService.initialize();
     await collisionService.initialize();
-    
+
     // Start services
     await gnssService.startPositioning();
     await meshService.startScanning();
     await collisionService.startMonitoring();
-    
+
     // Listen to position updates
     gnssService.positionStream.listen(_onPositionUpdate);
-    
+
     // Listen to mesh network updates
     meshService.positionReceivedStream.listen(_onPeerPositionUpdate);
-    
+
     // Listen to collision alerts
     collisionService.alertStream.listen(_onCollisionAlert);
   }
@@ -64,7 +102,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     setState(() {
       _currentPosition = LatLng(position.latitude, position.longitude);
     });
-    
+
     // Auto-follow location if enabled
     if (_isFollowingLocation && _currentPosition != null) {
       _mapController.move(_currentPosition!, _currentZoom);
@@ -76,7 +114,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     // Add peer position to GNSS service for cooperative positioning
     final gnssService = Provider.of<GnssService>(context, listen: false);
     gnssService.addPeerPosition(peerPosition);
-    
+
     setState(() {}); // Refresh markers
   }
 
@@ -96,11 +134,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         backgroundColor: Colors.red[900],
         title: const Row(
           children: [
-            Icon(
-              Icons.warning,
-              color: Colors.white,
-              size: 32,
-            ),
+            Icon(Icons.warning, color: Colors.white, size: 32),
             SizedBox(width: 8),
             Text(
               'COLLISION ALERT',
@@ -117,10 +151,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
           children: [
             Text(
               alert.message,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-              ),
+              style: const TextStyle(color: Colors.white, fontSize: 16),
             ),
             const SizedBox(height: 8),
             Text(
@@ -168,11 +199,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
             ),
-            child: const Icon(
-              Icons.navigation,
-              color: Colors.white,
-              size: 20,
-            ),
+            child: const Icon(Icons.navigation, color: Colors.white, size: 20),
           ),
         ),
       );
@@ -191,7 +218,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
           height: AppConfig.vehicleIconSize,
           child: Container(
             decoration: BoxDecoration(
-              color: distance != null && distance < 25.0 ? Colors.red : Colors.green,
+              color: distance != null && distance < 25.0
+                  ? Colors.red
+                  : Colors.green,
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
             ),
@@ -206,19 +235,29 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
 
     // Collision alert markers
-    final collisionService = Provider.of<CollisionDetectionService>(context, listen: false);
+    final collisionService = Provider.of<CollisionDetectionService>(
+      context,
+      listen: false,
+    );
     for (final alert in collisionService.activeAlerts) {
       // Skip alerts without position data or if current position is unknown
       if (_currentPosition == null) continue;
-      
+
       // Calculate approximate position based on relative position
       // This is a simplified calculation - in real implementation you'd need more sophisticated positioning
       final distance = alert.relativePosition.distance;
-      final bearing = alert.relativePosition.bearing * (math.pi / 180); // Convert to radians
-      
-      final lat = _currentPosition!.latitude + (distance * math.cos(bearing)) / 111320; // Rough conversion
-      final lng = _currentPosition!.longitude + (distance * math.sin(bearing)) / (111320 * math.cos(_currentPosition!.latitude * math.pi / 180));
-      
+      final bearing =
+          alert.relativePosition.bearing *
+          (math.pi / 180); // Convert to radians
+
+      final lat =
+          _currentPosition!.latitude +
+          (distance * math.cos(bearing)) / 111320; // Rough conversion
+      final lng =
+          _currentPosition!.longitude +
+          (distance * math.sin(bearing)) /
+              (111320 * math.cos(_currentPosition!.latitude * math.pi / 180));
+
       Color alertColor = Colors.yellow;
       IconData alertIcon = Icons.warning;
 
@@ -252,11 +291,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
             ),
-            child: Icon(
-              alertIcon,
-              color: Colors.white,
-              size: 20,
-            ),
+            child: Icon(alertIcon, color: Colors.white, size: 20),
           ),
         ),
       );
@@ -312,15 +347,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
               Icons.satellite_alt,
               Consumer<GnssService>(
                 builder: (context, service, child) {
-                  if (!service.isInitialized) return const Text('Initializing...');
-                  if (service.currentQuality == null) return const Text('No signal');
-                  
+                  if (!service.isInitialized)
+                    return const Text('Initializing...');
+                  if (service.currentQuality == null)
+                    return const Text('No signal');
+
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         '${service.satelliteCount} sats',
-                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
                       ),
                       Text(
                         service.currentQuality!.qualityDescription,
@@ -332,7 +372,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
               ),
             ),
           ),
-          
+
           Expanded(
             child: _buildStatusItem(
               'Network',
@@ -344,7 +384,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     children: [
                       Text(
                         '${service.connectedDeviceCount} devices',
-                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
                       ),
                       Text(
                         service.isScanning ? 'Scanning...' : 'Idle',
@@ -356,7 +399,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
               ),
             ),
           ),
-          
+
           Expanded(
             child: _buildStatusItem(
               'Safety',
@@ -472,11 +515,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
               if (_showNetworkPanel) _showSafetyPanel = false;
             });
           },
-          backgroundColor: _showNetworkPanel ? Theme.of(context).primaryColor : Colors.grey[600],
-          child: const Icon(
-            Icons.device_hub,
-            color: Colors.white,
-          ),
+          backgroundColor: _showNetworkPanel
+              ? Theme.of(context).primaryColor
+              : Colors.grey[600],
+          child: const Icon(Icons.device_hub, color: Colors.white),
         ),
         const SizedBox(height: 8),
         FloatingActionButton(
@@ -488,11 +530,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
               if (_showSafetyPanel) _showNetworkPanel = false;
             });
           },
-          backgroundColor: _showSafetyPanel ? Theme.of(context).primaryColor : Colors.grey[600],
-          child: const Icon(
-            Icons.security,
-            color: Colors.white,
-          ),
+          backgroundColor: _showSafetyPanel
+              ? Theme.of(context).primaryColor
+              : Colors.grey[600],
+          child: const Icon(Icons.security, color: Colors.white),
         ),
       ],
     );
@@ -513,12 +554,15 @@ class _NavigationScreenState extends State<NavigationScreen> {
               final color = safetyScore >= 80
                   ? Colors.green
                   : safetyScore >= 60
-                      ? Colors.orange
-                      : Colors.red;
-              
+                  ? Colors.orange
+                  : Colors.red;
+
               return Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: color,
                   borderRadius: BorderRadius.circular(16),
@@ -542,7 +586,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _currentPosition ?? const LatLng(28.6139, 77.2090), // Default to Delhi
+              initialCenter:
+                  _currentPosition ??
+                  const LatLng(28.6139, 77.2090), // Default to Delhi
               initialZoom: _currentZoom,
               minZoom: 3.0,
               maxZoom: 18.0,
@@ -559,17 +605,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 userAgentPackageName: 'com.navisafe.app',
                 maxZoom: 18,
               ),
-              
+
               // Proximity circles
-              CircleLayer(
-                circles: _buildProximityCircles(),
-              ),
-              
+              CircleLayer(circles: _buildProximityCircles()),
+
               // Vehicle and alert markers
-              MarkerLayer(
-                markers: _buildMarkers(),
-              ),
-              
+              MarkerLayer(markers: _buildMarkers()),
+
               // Attribution
               RichAttributionWidget(
                 attributions: [
@@ -592,25 +634,17 @@ class _NavigationScreenState extends State<NavigationScreen> {
               right: 0,
               child: SafetyAlertsWidget(),
             ),
-          
+
           // Network panel overlay
           if (_showNetworkPanel)
             const Positioned(
               top: 0,
               right: 0,
-              child: SizedBox(
-                width: 300,
-                child: MeshNetworkWidget(),
-              ),
+              child: SizedBox(width: 300, child: MeshNetworkWidget()),
             ),
-          
+
           // Bottom status bar
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildStatusBar(),
-          ),
+          Positioned(bottom: 0, left: 0, right: 0, child: _buildStatusBar()),
         ],
       ),
       floatingActionButton: _buildFloatingControls(),
@@ -619,6 +653,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   @override
   void dispose() {
+    _dataTimer?.cancel();
     super.dispose();
   }
 }
