@@ -12,6 +12,7 @@ import '../models/models.dart';
 import '../widgets/safety_alerts_widget.dart';
 import '../widgets/mesh_network_widget.dart';
 import '../config/app_config.dart';
+import 'settings_screen.dart';
 
 /// Main navigation screen with real-time OpenStreetMap and safety features
 class NavigationScreen extends StatefulWidget {
@@ -543,10 +544,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NaviSafe'),
+        title: const Text('AuraDrive'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
         actions: [
+          // Settings button
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
           // Safety score indicator
           Consumer<CollisionDetectionService>(
             builder: (context, collisionService, child) {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/navigation_screen.dart';
-import 'screens/welcome_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/gnss_service.dart';
 import 'services/mesh_network_service.dart';
 import 'services/collision_detection_service.dart';
@@ -117,7 +117,7 @@ class NaviSafeApp extends StatelessWidget {
         ),
         
         themeMode: ThemeMode.system, // Adapts to system settings
-        home: const WelcomeScreen(),
+        home: const SplashScreen(),
       ),
     );
   }

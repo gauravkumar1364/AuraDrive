@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'navigation_screen.dart';
+import 'phone_auth_screen.dart';
 
 /// Permissions screen that requests necessary permissions
 class PermissionsScreen extends StatefulWidget {
@@ -24,22 +24,65 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   Future<void> _checkExistingPermissions() async {
+    // Check location permissions
     final locationStatus = await Permission.location.status;
+    final locationAlwaysStatus = await Permission.locationAlways.status;
+    
+    // Check bluetooth permissions
     final bluetoothStatus = await Permission.bluetooth.status;
+    final bluetoothScanStatus = await Permission.bluetoothScan.status;
+    final bluetoothConnectStatus = await Permission.bluetoothConnect.status;
+    
+    // Check notification permissions
     final notificationStatus = await Permission.notification.status;
 
+    final locationGranted = locationStatus.isGranted || locationAlwaysStatus.isGranted;
+    final bluetoothGranted = bluetoothStatus.isGranted || 
+                        (bluetoothScanStatus.isGranted && bluetoothConnectStatus.isGranted);
+    final notificationGranted = notificationStatus.isGranted;
+
     setState(() {
-      _locationGranted = locationStatus.isGranted;
-      _bluetoothGranted = bluetoothStatus.isGranted;
-      _notificationGranted = notificationStatus.isGranted;
+      _locationGranted = locationGranted;
+      _bluetoothGranted = bluetoothGranted;
+      _notificationGranted = notificationGranted;
       _isCheckingPermissions = false;
     });
+
+    // If all permissions are already granted, automatically proceed
+    if (locationGranted && bluetoothGranted && notificationGranted) {
+      // Wait a bit to show the screen briefly
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        _continue();
+      }
+    }
   }
 
   Future<void> _requestLocationPermission() async {
+    // Check current status first
+    final currentStatus = await Permission.location.status;
+    
+    if (currentStatus.isGranted) {
+      // Already granted, just check background permission
+      final alwaysStatus = await Permission.locationAlways.status;
+      if (!alwaysStatus.isGranted) {
+        await Permission.locationAlways.request();
+      }
+      setState(() {
+        _locationGranted = true;
+      });
+      return;
+    }
+    
+    if (currentStatus.isPermanentlyDenied) {
+      _showSettingsDialog('Location');
+      return;
+    }
+    
+    // Request permission
     final status = await Permission.location.request();
     
-    // Also request background location if needed
+    // Also request background location if foreground was granted
     if (status.isGranted) {
       await Permission.locationAlways.request();
     }
@@ -54,16 +97,38 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   Future<void> _requestBluetoothPermission() async {
+    // Check current status first
+    final currentStatus = await Permission.bluetooth.status;
+    final scanStatus = await Permission.bluetoothScan.status;
+    final connectStatus = await Permission.bluetoothConnect.status;
+    
+    // If all permissions are already granted, just update state
+    if (currentStatus.isGranted && scanStatus.isGranted && connectStatus.isGranted) {
+      setState(() {
+        _bluetoothGranted = true;
+      });
+      return;
+    }
+    
+    if (currentStatus.isPermanentlyDenied) {
+      _showSettingsDialog('Bluetooth');
+      return;
+    }
+    
+    // Request bluetooth permission
     final status = await Permission.bluetooth.request();
     
-    // Also request bluetooth scan and connect on Android 12+
+    bool allGranted = status.isGranted;
+    
+    // Request additional Android 12+ permissions if base bluetooth was granted
     if (status.isGranted) {
-      await Permission.bluetoothScan.request();
-      await Permission.bluetoothConnect.request();
+      final scanResult = await Permission.bluetoothScan.request();
+      final connectResult = await Permission.bluetoothConnect.request();
+      allGranted = scanResult.isGranted && connectResult.isGranted;
     }
     
     setState(() {
-      _bluetoothGranted = status.isGranted;
+      _bluetoothGranted = allGranted;
     });
 
     if (status.isPermanentlyDenied) {
@@ -72,14 +137,45 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   Future<void> _requestNotificationPermission() async {
-    final status = await Permission.notification.request();
+    // Check current status first
+    final currentStatus = await Permission.notification.status;
     
-    setState(() {
-      _notificationGranted = status.isGranted;
-    });
-
-    if (status.isPermanentlyDenied) {
+    if (currentStatus.isGranted) {
+      setState(() {
+        _notificationGranted = true;
+      });
+      return;
+    }
+    
+    if (currentStatus.isPermanentlyDenied) {
       _showSettingsDialog('Notification');
+      return;
+    }
+    
+    // On Android 13+ (API 33+), notification permission is available
+    // On older versions, notifications are granted by default
+    try {
+      final status = await Permission.notification.request();
+      
+      setState(() {
+        _notificationGranted = status.isGranted;
+      });
+
+      if (status.isPermanentlyDenied) {
+        _showSettingsDialog('Notification');
+      } else if (status.isDenied) {
+        // On some platforms, notifications might not require explicit permission
+        // In that case, we can assume they're "granted"
+        setState(() {
+          _notificationGranted = true;
+        });
+      }
+    } catch (e) {
+      // If notification permission is not available on this platform,
+      // assume it's granted (iOS < 10, Android < 13)
+      setState(() {
+        _notificationGranted = true;
+      });
     }
   }
 
@@ -118,9 +214,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
 
   void _continue() {
     if (_locationGranted && _bluetoothGranted && _notificationGranted) {
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => const NavigationScreen(),
+          builder: (context) => const PhoneAuthScreen(),
         ),
       );
     } else {

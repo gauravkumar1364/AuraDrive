@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'how_it_works_screen.dart';
+import 'login_screen.dart';
 
 /// Welcome screen for AuraDrive with onboarding
 class WelcomeScreen extends StatefulWidget {
@@ -131,7 +131,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           onPressed: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (context) => const HowItWorksScreen(),
+                                builder: (context) => const LoginScreen(),
                               ),
                             );
                           },

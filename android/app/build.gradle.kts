@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.project"
     compileSdk = 36 // Use API level 36 which matches our build tools
-    ndkVersion = "29.0.14033849"  // Use the installed NDK version
+    ndkVersion = "27.0.12077973" // Use the installed NDK version
     
     // Explicitly disable all native C/C++ features since NaviSafe doesn't use them
     buildFeatures {

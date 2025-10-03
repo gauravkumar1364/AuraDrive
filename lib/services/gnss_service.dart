@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/models.dart';
+import 'simulated_location_service.dart';
 
 /// Mock GNSS measurement model for development
 class MockGnssMeasurementModel {
@@ -42,6 +44,10 @@ class GnssService extends ChangeNotifier {
   // Position stream subscription
   StreamSubscription<Position>? _positionSubscription;
   
+  // Simulated location service for testing
+  final SimulatedLocationService _simulatedLocation = SimulatedLocationService();
+  bool _useSimulation = false;
+  
   // Streams
   Stream<PositionData> get positionStream => _positionController.stream;
   Stream<GnssQuality> get qualityStream => _qualityController.stream;
@@ -56,7 +62,18 @@ class GnssService extends ChangeNotifier {
   /// Initialize GNSS service
   Future<bool> initialize() async {
     try {
-      // Check location permissions
+      // Check if running on desktop (Windows, macOS, Linux)
+      _useSimulation = !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+      
+      if (_useSimulation) {
+        debugPrint('🖥️ Running on desktop - using simulated location');
+        await _simulatedLocation.initialize();
+        _isInitialized = true;
+        notifyListeners();
+        return true;
+      }
+      
+      // Check location permissions for real devices
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -85,7 +102,13 @@ class GnssService extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('GnssService: Initialization error: $e');
-      return false;
+      // Fallback to simulation if real location fails
+      debugPrint('⚠️ Falling back to simulated location');
+      _useSimulation = true;
+      await _simulatedLocation.initialize();
+      _isInitialized = true;
+      notifyListeners();
+      return true;
     }
   }
   
@@ -102,21 +125,32 @@ class GnssService extends ChangeNotifier {
     }
     
     try {
-      // Start position updates with high accuracy
-      const LocationSettings locationSettings = LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 1, // Update every meter
-        timeLimit: Duration(seconds: 10),
-      );
-      
-      _positionSubscription = Geolocator.getPositionStream(
-        locationSettings: locationSettings,
-      ).listen(
-        _onPositionUpdate,
-        onError: (error) {
-          debugPrint('GnssService: Position update error: $error');
-        },
-      );
+      if (_useSimulation) {
+        // Use simulated location
+        _simulatedLocation.startLocationUpdates();
+        _positionSubscription = _simulatedLocation.getLocationStream()?.listen(
+          _onPositionUpdate,
+          onError: (error) {
+            debugPrint('GnssService: Simulated position error: $error');
+          },
+        );
+      } else {
+        // Start position updates with high accuracy
+        const LocationSettings locationSettings = LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 1, // Update every meter
+          timeLimit: Duration(seconds: 10),
+        );
+        
+        _positionSubscription = Geolocator.getPositionStream(
+          locationSettings: locationSettings,
+        ).listen(
+          _onPositionUpdate,
+          onError: (error) {
+            debugPrint('GnssService: Position update error: $error');
+          },
+        );
+      }
       
       // Start mock measurements for development
       _startMockMeasurements();

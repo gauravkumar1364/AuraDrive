@@ -47,6 +47,9 @@ dependencies:
   sqflite: ^2.3.0                 # Local database
   permission_handler: ^11.0.1     # Permissions
   path_provider: ^2.1.1           # File system access
+  shared_preferences: ^2.2.2      # Persistent storage
+  uuid: ^4.2.1                    # Generate unique IDs
+  crypto: ^3.0.3                  # Password hashing
 
 dev_dependencies:
   flutter_test:
