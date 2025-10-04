@@ -35,21 +35,41 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   
-  # NaviSafe Dependencies
-  # raw_gnss_flutter: ^1.0.0+1      # GNSS raw measurements (may not be available)
-  flutter_blue_plus: ^1.32.12     # BLE connectivity
-  # bridgefy: ^1.1.8                # Offline mesh networking (may not be available)
-  geolocator: ^10.1.0             # Location services
-  sensors_plus: ^4.0.2            # IMU sensors
+  # NaviSafe Dependencies - Mobile Autonomous System
+  # BLE Mesh Networking
+  flutter_blue_plus: ^1.32.12     # BLE connectivity and mesh networking
+  
+  # Wi-Fi VANET Simulation
+  wifi_iot: ^0.3.18               # Wi-Fi Direct for P2P communication
+  network_info_plus: ^5.0.3       # Network information
+  
+  # Location & Sensors (Kalman Filter)
+  geolocator: ^10.1.0             # GPS location services
+  sensors_plus: ^4.0.2            # IMU sensors (accelerometer, gyroscope, magnetometer)
+  geocoding: ^3.0.0               # Address search and geocoding
+  http: ^1.1.0                    # HTTP client for routing API
+  
+  # Mapping & Coordinates
   flutter_map: ^7.0.2             # OpenStreetMap display
   latlong2: ^0.9.1                # Coordinate calculations
+  
+  # State Management & Data
   provider: ^6.1.1                # State management
   sqflite: ^2.3.0                 # Local database
-  permission_handler: ^11.0.1     # Permissions
+  
+  # System & Utilities
+  permission_handler: ^11.0.1     # Permissions management
   path_provider: ^2.1.1           # File system access
   shared_preferences: ^2.2.2      # Persistent storage
   uuid: ^4.2.1                    # Generate unique IDs
   crypto: ^3.0.3                  # Password hashing
+  
+  # Math & Signal Processing
+  ml_linalg: ^13.12.6             # Linear algebra for Kalman filter
+  vector_math: ^2.1.4             # Vector operations
+  
+  # Background Processing
+  workmanager: ^0.5.2             # Background task management
 
 dev_dependencies:
   flutter_test:
