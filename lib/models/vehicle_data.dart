@@ -200,14 +200,50 @@ class AccelerationData {
     };
   }
 
-  /// Check if indicates potential crash (>4G threshold)
-  bool get indicatesCrash => magnitude > 39.2; // 4G = 4 * 9.8 m/s²
+  // Enhanced acceleration thresholds matching collision service
+  static const double crashThreshold = 29.4; // 3G (more sensitive)
+  static const double severeCrashThreshold = 49.0; // 5G (severe impact)
+  static const double hardBrakingThreshold = -5.0; // m/s² (more sensitive)
+  static const double emergencyBrakingThreshold = -8.0; // m/s² (emergency)
+  static const double sharpTurnThreshold = 3.5; // m/s² (more sensitive)
+  static const double aggressiveTurnThreshold = 5.5; // m/s² (aggressive)
+  
+  /// Check if indicates potential crash (>3G threshold)
+  bool get indicatesCrash => magnitude > crashThreshold;
+  
+  /// Check if indicates severe crash (>5G threshold)
+  bool get indicatesSevereCrash => magnitude > severeCrashThreshold;
 
   /// Check if indicates hard braking
-  bool get indicatesHardBraking => y < -6.0; // Strong deceleration
+  bool get indicatesHardBraking => y < hardBrakingThreshold;
+  
+  /// Check if indicates emergency braking
+  bool get indicatesEmergencyBraking => y < emergencyBrakingThreshold;
 
   /// Check if indicates sharp turn
-  bool get indicatesSharpTurn => x.abs() > 4.0; // High lateral acceleration
+  bool get indicatesSharpTurn => x.abs() > sharpTurnThreshold;
+  
+  /// Check if indicates aggressive turn
+  bool get indicatesAggressiveTurn => x.abs() > aggressiveTurnThreshold;
+  
+  /// Get turn direction ('LEFT', 'RIGHT', or null if not turning)
+  String? get turnDirection {
+    if (x.abs() > sharpTurnThreshold) {
+      return x > 0 ? 'RIGHT' : 'LEFT';
+    }
+    return null;
+  }
+  
+  /// Get detailed severity level
+  String get severityLevel {
+    if (indicatesSevereCrash) return 'SEVERE_CRASH';
+    if (indicatesCrash) return 'CRASH';
+    if (indicatesEmergencyBraking) return 'EMERGENCY_BRAKING';
+    if (indicatesHardBraking) return 'HARD_BRAKING';
+    if (indicatesAggressiveTurn) return 'AGGRESSIVE_TURN';
+    if (indicatesSharpTurn) return 'SHARP_TURN';
+    return 'NORMAL';
+  }
 }
 
 /// Model for device information

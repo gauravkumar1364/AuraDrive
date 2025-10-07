@@ -28,9 +28,9 @@ class MeshNetworkWidget extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildHeader(meshService),
-                _buildStats(meshService),
+                _buildNetworkStats(meshService),
                 if (meshService.discoveredDevices.isNotEmpty)
-                  Flexible(child: _buildDeviceList(meshService)),
+                  Expanded(child: _buildDeviceList(meshService)),
               ],
             ),
           ),
@@ -50,9 +50,9 @@ class MeshNetworkWidget extends StatelessWidget {
         children: [
           Icon(Icons.device_hub, color: Colors.white, size: 20),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'MESH NETWORK',
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -63,7 +63,7 @@ class MeshNetworkWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildStats(MeshNetworkService meshService) {
+  Widget _buildNetworkStats(MeshNetworkService meshService) {
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -124,7 +124,6 @@ class MeshNetworkWidget extends StatelessWidget {
         border: Border(top: BorderSide(color: Colors.grey[700]!, width: 1)),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -146,7 +145,7 @@ class MeshNetworkWidget extends StatelessWidget {
               ],
             ),
           ),
-          Flexible(
+          Expanded(
             child: Scrollbar(
               child: ListView.builder(
                 shrinkWrap: true,
@@ -157,7 +156,7 @@ class MeshNetworkWidget extends StatelessWidget {
                   final device = meshService.discoveredDevices.values.elementAt(
                     index,
                   );
-                  return _buildDeviceItem(device, meshService);
+                  return _buildDeviceItem(context, device, meshService);
                 },
               ),
             ),
@@ -168,6 +167,7 @@ class MeshNetworkWidget extends StatelessWidget {
   }
 
   Widget _buildDeviceItem(
+    BuildContext context,
     NetworkDevice device,
     MeshNetworkService meshService,
   ) {
@@ -175,27 +175,16 @@ class MeshNetworkWidget extends StatelessWidget {
     final signalQuality = device.signalQuality;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[800]!, width: 0.5),
-        ),
+        border: Border(bottom: BorderSide(color: Colors.grey[800]!, width: 1)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: isConnected ? Colors.green : Colors.grey,
-              shape: BoxShape.circle,
-            ),
-          ),
+          Icon(Icons.smartphone, color: Colors.white, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -205,68 +194,42 @@ class MeshNetworkWidget extends StatelessWidget {
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.signal_cellular_alt,
-                        color: _getSignalColor(signalQuality),
-                        size: 12,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$signalQuality%',
-                        style: TextStyle(
-                          color: _getSignalColor(signalQuality),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
+                Text(
+                  device.deviceId,
+                  style: TextStyle(color: Colors.grey[400], fontSize: 11),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          if (!isConnected)
-            SizedBox(
-              width: 60,
-              child: TextButton(
-                onPressed: () => meshService.connectToDevice(device.deviceId),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 4,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: Text(
-                  'Connect',
-                  style: TextStyle(color: Colors.blue[300], fontSize: 11),
-                ),
-              ),
-            )
-          else
-            SizedBox(
-              width: 80,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
                 children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 16),
+                  Icon(
+                    Icons.signal_cellular_alt,
+                    color: _getSignalColor(signalQuality),
+                    size: 16,
+                  ),
                   const SizedBox(width: 4),
                   Text(
-                    'Connected',
-                    style: TextStyle(color: Colors.green, fontSize: 11),
+                    '${signalQuality}%',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 11),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 4),
+              Text(
+                isConnected ? 'Connected' : 'Available',
+                style: TextStyle(
+                  color: isConnected ? Colors.green : Colors.grey[400],
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

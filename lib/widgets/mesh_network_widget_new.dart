@@ -254,18 +254,8 @@ class MeshNetworkWidget extends StatelessWidget {
             )
           else
             SizedBox(
-              width: 80,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Connected',
-                    style: TextStyle(color: Colors.green, fontSize: 11),
-                  ),
-                ],
-              ),
+              width: 24,
+              child: Icon(Icons.check_circle, color: Colors.green, size: 16),
             ),
         ],
       ),

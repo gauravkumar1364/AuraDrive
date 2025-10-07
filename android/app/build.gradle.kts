@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.project"
-    compileSdk = 36 // Use API level 36 which matches our build tools
+    compileSdk = 36 // Updated to API 36 to meet dependency requirements
     ndkVersion = "27.0.12077973" // Use the installed NDK version
     
     // Explicitly disable all native C/C++ features since NaviSafe doesn't use them
@@ -32,9 +32,9 @@ android {
     defaultConfig {
         // NaviSafe Application ID
         applicationId = "com.example.project"
-        // MinSdk 21 required for modern Bluetooth LE and location features
-        minSdk = flutter.minSdkVersion
-        targetSdk = 36
+        // MinSdk 23 required for modern Bluetooth LE and proper permission handling
+        minSdk = flutter.minSdkVersion  // Required for BLE, permission_handler, and Android 12+ compatibility
+        targetSdk = 34  // Using stable API 34 for better compatibility
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

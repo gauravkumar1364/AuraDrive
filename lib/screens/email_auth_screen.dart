@@ -5,11 +5,8 @@ import '../services/auth_service.dart';
 /// Email authentication screen
 class EmailAuthScreen extends StatefulWidget {
   final String phoneNumber;
-  
-  const EmailAuthScreen({
-    super.key,
-    required this.phoneNumber,
-  });
+
+  const EmailAuthScreen({super.key, required this.phoneNumber});
 
   @override
   State<EmailAuthScreen> createState() => _EmailAuthScreenState();
@@ -37,10 +34,11 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
       try {
         // Save user data and get unique user ID
-        final userId = await _authService.login(
+        final userId = await _authService.register(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           phone: widget.phoneNumber,
+          password: 'N/A', // We're not using password auth in this flow
         );
 
         // Mark onboarding as complete
@@ -60,18 +58,16 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
         // Navigate to main screen and remove all previous routes
         await Future.delayed(const Duration(milliseconds: 500));
-        
+
         if (!mounted) return;
-        
+
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => const NavigationScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => const NavigationScreen()),
           (route) => false, // Remove all previous routes
         );
       } catch (e) {
         if (!mounted) return;
-        
+
         setState(() {
           _isLoading = false;
         });
@@ -127,7 +123,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 60),
-                        
+
                         // Back button
                         IconButton(
                           onPressed: () => Navigator.of(context).pop(),
@@ -138,9 +134,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                           padding: EdgeInsets.zero,
                           alignment: Alignment.centerLeft,
                         ),
-                        
+
                         const SizedBox(height: 40),
-                        
+
                         // Title
                         const Text(
                           'Complete Your Profile',
@@ -150,9 +146,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             color: Colors.white,
                           ),
                         ),
-                        
+
                         const SizedBox(height: 12),
-                        
+
                         // Subtitle
                         Text(
                           'Just a few more details to get you started on your safer driving journey.',
@@ -162,9 +158,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             height: 1.5,
                           ),
                         ),
-                        
+
                         const SizedBox(height: 50),
-                        
+
                         // Name input
                         Container(
                           padding: const EdgeInsets.all(24),
@@ -227,9 +223,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             ],
                           ),
                         ),
-                        
+
                         const SizedBox(height: 24),
-                        
+
                         // Email input
                         Container(
                           padding: const EdgeInsets.all(24),
@@ -291,9 +287,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             ],
                           ),
                         ),
-                        
+
                         const SizedBox(height: 30),
-                        
+
                         // Phone number display
                         Container(
                           padding: const EdgeInsets.all(16),
@@ -345,7 +341,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                 ),
               ),
             ),
-            
+
             // Bottom button
             Padding(
               padding: const EdgeInsets.all(24.0),
@@ -354,7 +350,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   // Page indicators
                   _buildPageIndicators(),
                   const SizedBox(height: 24),
-                  
+
                   // Get Started button
                   SizedBox(
                     width: double.infinity,

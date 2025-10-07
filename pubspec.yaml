@@ -63,13 +63,17 @@ dependencies:
   shared_preferences: ^2.2.2      # Persistent storage
   uuid: ^4.2.1                    # Generate unique IDs
   crypto: ^3.0.3                  # Password hashing
+
+  # App metadata (used to derive a deterministic service UUID at runtime)
+  package_info_plus: ^4.0.0
+  flutter_ble_peripheral: ^1.2.6
   
   # Math & Signal Processing
   ml_linalg: ^13.12.6             # Linear algebra for Kalman filter
   vector_math: ^2.1.4             # Vector operations
   
   # Background Processing
-  workmanager: ^0.5.2             # Background task management
+  workmanager: ^0.9.0+3           # Background task management (updated to fix Android kotlin compile issues)
 
 dev_dependencies:
   flutter_test:

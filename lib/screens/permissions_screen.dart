@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'phone_auth_screen.dart';
@@ -14,7 +15,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   bool _locationGranted = false;
   bool _bluetoothGranted = false;
   bool _notificationGranted = false;
-  
+
   bool _isCheckingPermissions = true;
 
   @override
@@ -27,18 +28,21 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     // Check location permissions
     final locationStatus = await Permission.location.status;
     final locationAlwaysStatus = await Permission.locationAlways.status;
-    
+
     // Check bluetooth permissions
     final bluetoothStatus = await Permission.bluetooth.status;
     final bluetoothScanStatus = await Permission.bluetoothScan.status;
     final bluetoothConnectStatus = await Permission.bluetoothConnect.status;
-    
+    final bluetoothAdvertiseStatus = await Permission.bluetoothAdvertise.status;
+
     // Check notification permissions
     final notificationStatus = await Permission.notification.status;
 
-    final locationGranted = locationStatus.isGranted || locationAlwaysStatus.isGranted;
-    final bluetoothGranted = bluetoothStatus.isGranted || 
-                        (bluetoothScanStatus.isGranted && bluetoothConnectStatus.isGranted);
+    final locationGranted =
+        locationStatus.isGranted || locationAlwaysStatus.isGranted;
+    final bluetoothGranted =
+        bluetoothStatus.isGranted ||
+        (bluetoothScanStatus.isGranted && bluetoothConnectStatus.isGranted && bluetoothAdvertiseStatus.isGranted);
     final notificationGranted = notificationStatus.isGranted;
 
     setState(() {
@@ -61,7 +65,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   Future<void> _requestLocationPermission() async {
     // Check current status first
     final currentStatus = await Permission.location.status;
-    
+
     if (currentStatus.isGranted) {
       // Already granted, just check background permission
       final alwaysStatus = await Permission.locationAlways.status;
@@ -73,20 +77,31 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
       });
       return;
     }
-    
+
     if (currentStatus.isPermanentlyDenied) {
       _showSettingsDialog('Location');
       return;
     }
-    
+
     // Request permission
     final status = await Permission.location.request();
-    
+
+    // If denied (but not permanently), show rationale and allow retry
+    if (status.isDenied) {
+      await _showRationaleDialog('Location', Permission.location);
+    }
+
     // Also request background location if foreground was granted
     if (status.isGranted) {
-      await Permission.locationAlways.request();
+      final alwaysStatus = await Permission.locationAlways.request();
+      if (alwaysStatus.isDenied) {
+        await _showRationaleDialog(
+          'Background Location',
+          Permission.locationAlways,
+        );
+      }
     }
-    
+
     setState(() {
       _locationGranted = status.isGranted;
     });
@@ -97,78 +112,103 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   Future<void> _requestBluetoothPermission() async {
-    // Check current status first
-    final currentStatus = await Permission.bluetooth.status;
-    final scanStatus = await Permission.bluetoothScan.status;
-    final connectStatus = await Permission.bluetoothConnect.status;
+    debugPrint('PermissionsScreen: Requesting Bluetooth permissions...');
     
-    // If all permissions are already granted, just update state
-    if (currentStatus.isGranted && scanStatus.isGranted && connectStatus.isGranted) {
+    try {
+      // On Android 12+ (API 31+), request new permissions first
+      debugPrint('PermissionsScreen: Requesting new Bluetooth permissions (Android 12+)...');
+      final scanStatus = await Permission.bluetoothScan.request();
+      final connectStatus = await Permission.bluetoothConnect.request();
+      final advertiseStatus = await Permission.bluetoothAdvertise.request();
+      
+      debugPrint('PermissionsScreen: Scan status: $scanStatus');
+      debugPrint('PermissionsScreen: Connect status: $connectStatus');
+      debugPrint('PermissionsScreen: Advertise status: $advertiseStatus');
+      
+      // Also request legacy permission for older devices
+      debugPrint('PermissionsScreen: Requesting legacy Bluetooth permission...');
+      final legacyStatus = await Permission.bluetooth.request();
+      debugPrint('PermissionsScreen: Legacy Bluetooth status: $legacyStatus');
+      
+      final newPermissionsGranted = scanStatus.isGranted && connectStatus.isGranted && advertiseStatus.isGranted;
+      final legacyGranted = legacyStatus.isGranted;
+      final allGranted = newPermissionsGranted || legacyGranted;
+      
+      debugPrint('PermissionsScreen: New permissions granted: $newPermissionsGranted');
+      debugPrint('PermissionsScreen: Legacy permission granted: $legacyGranted');
+      debugPrint('PermissionsScreen: All Bluetooth permissions granted: $allGranted');
+      
       setState(() {
-        _bluetoothGranted = true;
+        _bluetoothGranted = allGranted;
       });
-      return;
-    }
-    
-    if (currentStatus.isPermanentlyDenied) {
-      _showSettingsDialog('Bluetooth');
-      return;
-    }
-    
-    // Request bluetooth permission
-    final status = await Permission.bluetooth.request();
-    
-    bool allGranted = status.isGranted;
-    
-    // Request additional Android 12+ permissions if base bluetooth was granted
-    if (status.isGranted) {
-      final scanResult = await Permission.bluetoothScan.request();
-      final connectResult = await Permission.bluetoothConnect.request();
-      allGranted = scanResult.isGranted && connectResult.isGranted;
-    }
-    
-    setState(() {
-      _bluetoothGranted = allGranted;
-    });
-
-    if (status.isPermanentlyDenied) {
-      _showSettingsDialog('Bluetooth');
+      
+      if (!allGranted) {
+        // Check if any are permanently denied
+        final permanentlyDenied = scanStatus.isPermanentlyDenied || 
+            connectStatus.isPermanentlyDenied || 
+            advertiseStatus.isPermanentlyDenied ||
+            legacyStatus.isPermanentlyDenied;
+            
+        debugPrint('PermissionsScreen: Any permission permanently denied: $permanentlyDenied');
+        
+        if (permanentlyDenied) {
+          _showSettingsDialog('Bluetooth');
+        } else {
+          await _showRationaleDialog('Bluetooth', Permission.bluetooth);
+        }
+      }
+    } catch (e) {
+      debugPrint('PermissionsScreen: Error requesting new Bluetooth permissions: $e');
+      // Fallback: try legacy permission only
+      debugPrint('PermissionsScreen: Falling back to legacy Bluetooth permission only...');
+      final legacyStatus = await Permission.bluetooth.request();
+      debugPrint('PermissionsScreen: Legacy fallback status: $legacyStatus');
+      
+      setState(() {
+        _bluetoothGranted = legacyStatus.isGranted;
+      });
+      
+      if (legacyStatus.isPermanentlyDenied) {
+        debugPrint('PermissionsScreen: Legacy permission permanently denied');
+        _showSettingsDialog('Bluetooth');
+      } else if (!legacyStatus.isGranted) {
+        debugPrint('PermissionsScreen: Legacy permission denied but not permanently');
+        await _showRationaleDialog('Bluetooth', Permission.bluetooth);
+      }
     }
   }
 
   Future<void> _requestNotificationPermission() async {
     // Check current status first
     final currentStatus = await Permission.notification.status;
-    
+
     if (currentStatus.isGranted) {
       setState(() {
         _notificationGranted = true;
       });
       return;
     }
-    
+
     if (currentStatus.isPermanentlyDenied) {
       _showSettingsDialog('Notification');
       return;
     }
-    
+
     // On Android 13+ (API 33+), notification permission is available
     // On older versions, notifications are granted by default
     try {
       final status = await Permission.notification.request();
-      
+
+      if (status.isDenied) {
+        await _showRationaleDialog('Notification', Permission.notification);
+      }
+
       setState(() {
         _notificationGranted = status.isGranted;
       });
 
       if (status.isPermanentlyDenied) {
         _showSettingsDialog('Notification');
-      } else if (status.isDenied) {
-        // On some platforms, notifications might not require explicit permission
-        // In that case, we can assume they're "granted"
-        setState(() {
-          _notificationGranted = true;
-        });
       }
     } catch (e) {
       // If notification permission is not available on this platform,
@@ -177,6 +217,68 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         _notificationGranted = true;
       });
     }
+  }
+
+  /// Show a short rationale dialog with options to retry the request or open app settings
+  Future<void> _showRationaleDialog(
+    String permissionName,
+    Permission permission,
+  ) async {
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(
+          '$permissionName Permission',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'This app needs $permissionName permission to work properly. Would you like to try granting it again or open app settings?',
+          style: TextStyle(color: Colors.white.withOpacity(0.8)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final result = await permission.request();
+              if (result.isPermanentlyDenied) {
+                _showSettingsDialog(permissionName);
+              } else {
+                setState(() {
+                  if (permission == Permission.location ||
+                      permission == Permission.locationAlways) {
+                    _locationGranted = result.isGranted;
+                  } else if (permission == Permission.bluetooth ||
+                      permission == Permission.bluetoothScan ||
+                      permission == Permission.bluetoothConnect) {
+                    _bluetoothGranted = result.isGranted;
+                  } else if (permission == Permission.notification) {
+                    _notificationGranted = result.isGranted;
+                  }
+                });
+              }
+            },
+            child: const Text('Try Again'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              openAppSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3A86FF),
+            ),
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSettingsDialog(String permissionName) {
@@ -214,11 +316,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
 
   void _continue() {
     if (_locationGranted && _bluetoothGranted && _notificationGranted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const PhoneAuthScreen(),
-        ),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (context) => const PhoneAuthScreen()));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -247,7 +347,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 60),
-                      
+
                       // Title
                       const Text(
                         'Permissions Required',
@@ -258,9 +358,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      
+
                       const SizedBox(height: 12),
-                      
+
                       // Subtitle
                       Text(
                         'AuraDrive needs access to function correctly.',
@@ -270,9 +370,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      
+
                       const SizedBox(height: 50),
-                      
+
                       // Location Permission Card
                       _buildPermissionCard(
                         icon: Icons.location_on,
@@ -284,9 +384,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                         isGranted: _locationGranted,
                         onTap: _requestLocationPermission,
                       ),
-                      
+
                       const SizedBox(height: 20),
-                      
+
                       // Bluetooth Permission Card
                       _buildPermissionCard(
                         icon: Icons.bluetooth,
@@ -298,9 +398,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                         isGranted: _bluetoothGranted,
                         onTap: _requestBluetoothPermission,
                       ),
-                      
+
                       const SizedBox(height: 20),
-                      
+
                       // Notification Permission Card
                       _buildPermissionCard(
                         icon: Icons.notifications,
@@ -312,14 +412,14 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                         isGranted: _notificationGranted,
                         onTap: _requestNotificationPermission,
                       ),
-                      
+
                       const SizedBox(height: 30),
                     ],
                   ),
                 ),
               ),
             ),
-            
+
             // Bottom navigation
             Padding(
               padding: const EdgeInsets.all(24.0),
@@ -328,7 +428,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   // Page indicators
                   _buildPageIndicators(),
                   const SizedBox(height: 24),
-                  
+
                   // Continue button
                   SizedBox(
                     width: double.infinity,
@@ -336,7 +436,8 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                     child: ElevatedButton(
                       onPressed: _continue,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: (_locationGranted &&
+                        backgroundColor:
+                            (_locationGranted &&
                                 _bluetoothGranted &&
                                 _notificationGranted)
                             ? const Color(0xFF3A86FF)
@@ -346,7 +447,8 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                         elevation: 8,
-                        shadowColor: (_locationGranted &&
+                        shadowColor:
+                            (_locationGranted &&
                                 _bluetoothGranted &&
                                 _notificationGranted)
                             ? const Color(0xFF3A86FF).withOpacity(0.5)
@@ -362,9 +464,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Back button
                   TextButton(
                     onPressed: () {
@@ -421,11 +523,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   color: iconColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 28,
-                ),
+                child: Icon(icon, color: iconColor, size: 28),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -443,11 +541,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                     if (isGranted)
                       Row(
                         children: [
-                          Icon(
-                            Icons.check_circle,
-                            color: iconColor,
-                            size: 16,
-                          ),
+                          Icon(Icons.check_circle, color: iconColor, size: 16),
                           const SizedBox(width: 4),
                           Text(
                             'Granted',

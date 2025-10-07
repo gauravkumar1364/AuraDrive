@@ -1,79 +1,103 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
-import '../models/models.dart';
+import 'dart:io';
+import 'dart:typed_data';
 
-/// Service for managing BLE mesh network communication
+import 'package:flutter/foundation.dart';
+import 'package:flutter_ble_peripheral/flutter_ble_peripheral.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:uuid/uuid.dart';
+
+import '../models/position_data.dart';
+import '../models/network_device.dart';
+import '../models/vehicle_data.dart';
+
+/// Service for managing BLE mesh network communication.
 class MeshNetworkService extends ChangeNotifier {
-  // BLE state
-  bool _isInitialized = false;
-  bool _isScanning = false;
-  final bool _isAdvertising = false;
-  
-  // Network devices
-  final Map<String, NetworkDevice> _discoveredDevices = {};
-  final Map<String, BluetoothDevice> _connectedDevices = {};
-  
-  // Data sharing
-  final Map<String, PositionData> _sharedPositions = {};
-  final Map<String, VehicleData> _sharedVehicleData = {};
-  
-  // Stream controllers
-  final StreamController<NetworkDevice> _deviceDiscoveredController = 
-      StreamController<NetworkDevice>.broadcast();
-  final StreamController<PositionData> _positionReceivedController = 
-      StreamController<PositionData>.broadcast();
-  final StreamController<VehicleData> _vehicleDataReceivedController = 
-      StreamController<VehicleData>.broadcast();
-  final StreamController<String> _networkStatusController = 
-      StreamController<String>.broadcast();
-  
-  // Streams
-  Stream<NetworkDevice> get deviceDiscoveredStream => _deviceDiscoveredController.stream;
-  Stream<PositionData> get positionReceivedStream => _positionReceivedController.stream;
-  Stream<VehicleData> get vehicleDataReceivedStream => _vehicleDataReceivedController.stream;
-  Stream<String> get networkStatusStream => _networkStatusController.stream;
-  
-  // Service UUIDs for NaviSafe
-  static const String naviSafeServiceUuid = '12345678-1234-1234-1234-123456789abc';
-  static const String positionCharacteristicUuid = '12345678-1234-1234-1234-123456789abd';
-  static const String vehicleDataCharacteristicUuid = '12345678-1234-1234-1234-123456789abe';
-  
-  // Getters
-  bool get isInitialized => _isInitialized;
-  bool get isScanning => _isScanning;
-  bool get isAdvertising => _isAdvertising;
-  int get connectedDeviceCount => _connectedDevices.length;
-  Map<String, NetworkDevice> get discoveredDevices => Map.unmodifiable(_discoveredDevices);
-  Map<String, PositionData> get sharedPositions => Map.unmodifiable(_sharedPositions);
-  
+  static final MeshNetworkService _instance = MeshNetworkService._internal();
+
+  MeshNetworkService._internal();
+
+  factory MeshNetworkService() => _instance;
+
+  /// Request and check required BLE and location permissions
+  Future<bool> _checkPermissions() async {
+    try {
+      final locationStatus = await Permission.location.request();
+      if (!locationStatus.isGranted) {
+        debugPrint('MeshNetworkService: Location permission denied');
+        return false;
+      }
+
+      if (Platform.isAndroid) {
+        final bluetoothScan = await Permission.bluetoothScan.request();
+        final bluetoothConnect = await Permission.bluetoothConnect.request();
+        final bluetoothAdvertise = await Permission.bluetoothAdvertise
+            .request();
+
+        if (!bluetoothScan.isGranted ||
+            !bluetoothConnect.isGranted ||
+            !bluetoothAdvertise.isGranted) {
+          debugPrint('MeshNetworkService: Bluetooth permissions denied');
+          return false;
+        }
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('MeshNetworkService: Permission error: $e');
+      return false;
+    }
+  }
+
+  /// Attempt to start advertising
+  Future<void> _attemptAdvertising() async {
+    try {
+      if (!await _blePeripheral.isAdvertising) {
+        final packageInfo = await PackageInfo.fromPlatform();
+        final deviceId = const Uuid().v4().substring(0, 8);
+        await _blePeripheral.start(
+          advertiseData: AdvertiseData(
+            serviceUuid: naviSafeServiceUuid,
+            localName: 'NaviSafe-${deviceId}',
+            manufacturerId: 0x0000,
+            manufacturerData: Uint8List.fromList(
+              utf8.encode(packageInfo.version),
+            ),
+          ),
+        );
+        _isAdvertising = true;
+        debugPrint(
+          'MeshNetworkService: Started advertising as NaviSafe-${deviceId}',
+        );
+      }
+    } catch (e) {
+      debugPrint('MeshNetworkService: Advertising error: $e');
+    }
+  }
+
   /// Initialize the mesh network service
   Future<bool> initialize() async {
     try {
-      // Check Bluetooth permissions
       if (!await _checkPermissions()) {
         debugPrint('MeshNetworkService: Permissions denied');
         return false;
       }
-      
-      // Check if Bluetooth is supported
+
       if (!await FlutterBluePlus.isSupported) {
         debugPrint('MeshNetworkService: Bluetooth not supported');
         return false;
       }
-      
-      // Wait for Bluetooth to be turned on
-      final adapterState = await FlutterBluePlus.adapterState.first;
-      if (adapterState != BluetoothAdapterState.on) {
-        debugPrint('MeshNetworkService: Bluetooth adapter not on');
-        return false;
-      }
-      
+
+      await _generateServiceUuid();
       _isInitialized = true;
       notifyListeners();
-      
+
+      await _attemptAdvertising();
+      _startContinuousScanning();
+
       debugPrint('MeshNetworkService: Initialized successfully');
       return true;
     } catch (e) {
@@ -81,375 +105,332 @@ class MeshNetworkService extends ChangeNotifier {
       return false;
     }
   }
-  
-  /// Check required permissions
-  Future<bool> _checkPermissions() async {
-    final permissions = [
-      Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothAdvertise,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ];
-    
-    for (final permission in permissions) {
-      final status = await permission.request();
-      if (!status.isGranted) {
-        debugPrint('MeshNetworkService: Permission denied: $permission');
-        return false;
+
+  // BLE state
+  bool _isInitialized = false;
+  bool _isScanning = false;
+  StreamSubscription<List<ScanResult>>? _scanResultsSubscription;
+  bool _isAdvertising = false;
+  Timer? _scanTimer;
+  Timer? _reconnectTimer;
+  static const Duration _scanInterval = Duration(seconds: 30);
+  static const Duration _reconnectInterval = Duration(seconds: 15);
+
+  // BLE peripheral instance for advertising
+  final FlutterBlePeripheral _blePeripheral = FlutterBlePeripheral();
+
+  // Network devices
+  final Map<String, NetworkDevice> _discoveredDevices = {};
+  final Map<String, BluetoothDevice> _connectedDevices = {};
+
+  // Cluster configuration
+
+  int _maxClusterSize = 8;
+  static const int minRssiThreshold = -80;
+  final Map<String, int> _connectionAttempts = {};
+  static const int maxConnectionAttempts = 3;
+
+  // Cached characteristics for efficient broadcasting
+  final Map<String, BluetoothCharacteristic> _positionCharacteristics = {};
+  final Map<String, BluetoothCharacteristic> _vehicleDataCharacteristics = {};
+
+  // Connection subscriptions for robust state management
+  final Map<String, StreamSubscription<BluetoothConnectionState>>
+  _connectionSubscriptions = {};
+
+  // Data sharing
+  final Map<String, PositionData> _sharedPositions = <String, PositionData>{};
+
+  // Stream controllers
+  final StreamController<NetworkDevice> _deviceDiscoveredController =
+      StreamController<NetworkDevice>.broadcast();
+  final StreamController<PositionData> _positionReceivedController =
+      StreamController<PositionData>.broadcast();
+  final StreamController<VehicleData> _vehicleDataReceivedController =
+      StreamController<VehicleData>.broadcast();
+  final StreamController<String> _networkStatusController =
+      StreamController<String>.broadcast();
+
+  // Streams
+  Stream<NetworkDevice> get deviceDiscoveredStream =>
+      _deviceDiscoveredController.stream;
+  Stream<PositionData> get positionReceivedStream =>
+      _positionReceivedController.stream;
+  Stream<VehicleData> get vehicleDataReceivedStream =>
+      _vehicleDataReceivedController.stream;
+  Stream<String> get networkStatusStream => _networkStatusController.stream;
+
+  // Service UUIDs
+  String naviSafeServiceUuid = '12345678-1234-1234-1234-123456789abc';
+  late final Guid naviSafeServiceGuid;
+
+  // Characteristic UUIDs
+  static const String positionCharacteristicUuid =
+      '12345678-1234-1234-1234-123456789abd';
+  static const String vehicleDataCharacteristicUuid =
+      '12345678-1234-1234-1234-123456789abe';
+
+  // Getters
+  bool get isInitialized => _isInitialized;
+  bool get isScanning => _isScanning;
+  bool get isAdvertising => _isAdvertising;
+  int get connectedDeviceCount => _connectedDevices.length;
+  Map<String, NetworkDevice> get discoveredDevices =>
+      Map.unmodifiable(_discoveredDevices);
+  Map<String, PositionData> get sharedPositions =>
+      Map.unmodifiable(_sharedPositions);
+
+  /// Start continuous scanning for devices
+  void _startContinuousScanning() async {
+    if (!_isScanning) {
+      await startScanning();
+    }
+
+    _scanTimer?.cancel();
+    _scanTimer = Timer.periodic(_scanInterval, (timer) async {
+      if (!_isScanning) {
+        await startScanning();
+      }
+    });
+
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer.periodic(_reconnectInterval, (timer) {
+      _attemptReconnections();
+    });
+  }
+
+  /// Attempt to reconnect to previously discovered devices
+  void _attemptReconnections() {
+    if (_connectedDevices.length >= _maxClusterSize) return;
+
+    for (var device in _discoveredDevices.values) {
+      if (!_connectedDevices.containsKey(device.deviceId) &&
+          (_connectionAttempts[device.deviceId] ?? 0) < maxConnectionAttempts) {
+        _connectionAttempts[device.deviceId] =
+            (_connectionAttempts[device.deviceId] ?? 0) + 1;
+        connectToDevice(device.deviceId).then((success) {
+          if (success) {
+            _connectionAttempts.remove(device.deviceId);
+            debugPrint(
+              'MeshNetworkService: Reconnected to ${device.deviceId} successfully',
+            );
+          }
+        });
       }
     }
-    
-    return true;
   }
-  
-  /// Start scanning for nearby NaviSafe devices
-  Future<bool> startScanning() async {
-    if (!_isInitialized) {
-      debugPrint('MeshNetworkService: Not initialized');
-      return false;
-    }
-    
+
+  /// Stop continuous scanning
+  void _stopContinuousScanning() {
+    _scanTimer?.cancel();
+    _reconnectTimer?.cancel();
+    _scanTimer = null;
+    _reconnectTimer = null;
     if (_isScanning) {
-      debugPrint('MeshNetworkService: Already scanning');
-      return true;
+      stopScanning();
     }
-    
+  }
+
+  /// Start scanning for BLE devices
+  Future<void> startScanning() async {
+    if (_isScanning) return;
+
     try {
-      // Clear previous discoveries
-      _discoveredDevices.clear();
-      
-      // Start scanning with specific service UUID
+      // Subscribe to scan results
+      _scanResultsSubscription?.cancel();
+      _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
+        for (final result in results) {
+          if (result.advertisementData.serviceUuids.any(
+                (uuid) =>
+                    uuid.toString().toLowerCase() ==
+                    naviSafeServiceUuid.toLowerCase(),
+              ) ||
+              result.advertisementData.localName.startsWith('NaviSafe')) {
+            final deviceId = result.device.remoteId.toString();
+            final device = NetworkDevice(
+              deviceId: deviceId,
+              deviceName: result.advertisementData.localName.isNotEmpty
+                  ? result.advertisementData.localName
+                  : 'NaviSafe Device ${deviceId.substring(0, 4)}',
+              lastSeen: DateTime.now(),
+              connectionStrength: result.rssi,
+              status: result.device.isConnected
+                  ? NetworkDeviceStatus.connected
+                  : NetworkDeviceStatus.offline,
+              capabilities: DeviceCapabilities(
+                supportsRawGnss: true,
+                supportsNavIC: false,
+                supportsBluetooth: true,
+                supportsWifi: false,
+                supportsAccelerometer: true,
+                supportsGyroscope: true,
+                supportsMagnetometer: true,
+              ),
+            );
+            // Only add devices with acceptable signal strength
+            if (result.rssi > minRssiThreshold) {
+              _discoveredDevices[device.deviceId] = device;
+              _deviceDiscoveredController.add(device);
+              notifyListeners();
+              debugPrint(
+                'MeshNetworkService: Discovered device ${device.deviceName} with RSSI ${result.rssi}',
+              );
+            }
+          }
+        }
+      });
+
+      // Start scanning with optimized settings
       await FlutterBluePlus.startScan(
-        withServices: [Guid(naviSafeServiceUuid)],
         timeout: const Duration(seconds: 30),
+        androidUsesFineLocation: true,
+        withServices: [Guid(naviSafeServiceUuid)], // Filter for our service
       );
-      
-      // Listen for scan results
-      FlutterBluePlus.scanResults.listen(_onDeviceDiscovered);
-      
       _isScanning = true;
       notifyListeners();
-      
-      _networkStatusController.add('Scanning for devices...');
-      debugPrint('MeshNetworkService: Started scanning');
-      return true;
+
+      // Set up timer to restart scan after timeout
+      Future.delayed(const Duration(seconds: 31), () async {
+        if (_isInitialized) {
+          _isScanning = false;
+          await startScanning(); // Restart scan
+        }
+      });
     } catch (e) {
       debugPrint('MeshNetworkService: Error starting scan: $e');
-      return false;
     }
   }
-  
-  /// Stop scanning for devices
+
+  /// Stop scanning for BLE devices
   Future<void> stopScanning() async {
     if (!_isScanning) return;
-    
-    try {
-      await FlutterBluePlus.stopScan();
-      _isScanning = false;
-      notifyListeners();
-      
-      _networkStatusController.add('Scan stopped');
-      debugPrint('MeshNetworkService: Stopped scanning');
-    } catch (e) {
-      debugPrint('MeshNetworkService: Error stopping scan: $e');
-    }
+    await FlutterBluePlus.stopScan();
+    _isScanning = false;
+    notifyListeners();
   }
-  
-  /// Handle discovered devices
-  void _onDeviceDiscovered(List<ScanResult> results) {
-    for (final result in results) {
-      final device = result.device;
-      final deviceId = device.remoteId.toString();
-      
-      // Create network device info
-      final networkDevice = NetworkDevice(
-        deviceId: deviceId,
-        deviceName: device.platformName.isNotEmpty ? device.platformName : 'NaviSafe Device',
-        lastSeen: DateTime.now(),
-        connectionStrength: result.rssi,
-        status: NetworkDeviceStatus.offline,
-        capabilities: const DeviceCapabilities(
-          supportsRawGnss: true,
-          supportsNavIC: true,
-          supportsBluetooth: true,
-          supportsWifi: false,
-          supportsAccelerometer: true,
-          supportsGyroscope: true,
-          supportsMagnetometer: true,
-        ),
-      );
-      
-      _discoveredDevices[deviceId] = networkDevice;
-      _deviceDiscoveredController.add(networkDevice);
-      notifyListeners();
-      
-      debugPrint('MeshNetworkService: Discovered device: ${device.platformName} ($deviceId)');
-    }
-  }
-  
-  /// Connect to a specific device
+
+  /// Connect to a specific device by ID
   Future<bool> connectToDevice(String deviceId) async {
-    final networkDevice = _discoveredDevices[deviceId];
-    if (networkDevice == null) {
-      debugPrint('MeshNetworkService: Device not found: $deviceId');
-      return false;
-    }
-    
     try {
-      // Find the Bluetooth device
       final scanResults = await FlutterBluePlus.scanResults.first;
       final scanResult = scanResults.firstWhere(
-        (result) => result.device.remoteId.toString() == deviceId,
-        orElse: () => throw Exception('Device not in scan results'),
+        (r) => r.device.remoteId.toString() == deviceId,
+        orElse: () => throw Exception('Device not found in scan results'),
       );
-      
       final device = scanResult.device;
-      
-      // Connect to device
-      await device.connect(timeout: const Duration(seconds: 15));
-      
-      // Discover services
+
+      await device.connect(timeout: const Duration(seconds: 20));
+
       final services = await device.discoverServices();
-      
-      // Find NaviSafe service
       final naviSafeService = services.firstWhere(
-        (service) => service.uuid.toString() == naviSafeServiceUuid,
+        (s) =>
+            s.uuid.toString().toLowerCase() ==
+            naviSafeServiceUuid.toLowerCase(),
         orElse: () => throw Exception('NaviSafe service not found'),
       );
-      
-      // Setup characteristics for data sharing
-      await _setupCharacteristics(device, naviSafeService);
-      
-      // Update device status
+
       _connectedDevices[deviceId] = device;
-      _discoveredDevices[deviceId] = networkDevice.copyWith(
-        status: NetworkDeviceStatus.connected,
-        lastSeen: DateTime.now(),
+      _connectionSubscriptions[deviceId] = device.connectionState.listen(
+        (state) {
+          if (state == BluetoothConnectionState.disconnected) {
+            _handleDeviceDisconnected(deviceId);
+          }
+        },
+        onError: (e) {
+          debugPrint(
+            'MeshNetworkService: Connection state error for $deviceId: $e',
+          );
+          _handleDeviceDisconnected(deviceId);
+        },
       );
-      
-      notifyListeners();
+
       _networkStatusController.add('Connected to ${device.platformName}');
-      
-      debugPrint('MeshNetworkService: Connected to device: $deviceId');
+
+      // Set up characteristic monitoring
+      final positionChar = naviSafeService.characteristics.firstWhere(
+        (c) => c.uuid.toString() == positionCharacteristicUuid,
+      );
+      _positionCharacteristics[deviceId] = positionChar;
+
+      final vehicleDataChar = naviSafeService.characteristics.firstWhere(
+        (c) => c.uuid.toString() == vehicleDataCharacteristicUuid,
+      );
+      _vehicleDataCharacteristics[deviceId] = vehicleDataChar;
+
       return true;
     } catch (e) {
-      debugPrint('MeshNetworkService: Error connecting to device: $e');
+      debugPrint('MeshNetworkService: Connect error: $e');
       return false;
     }
   }
-  
-  /// Setup characteristics for data communication
-  Future<void> _setupCharacteristics(BluetoothDevice device, BluetoothService service) async {
+
+  /// Broadcast position data to all connected devices
+  Future<bool> broadcastPositionData(PositionData data) async {
+    if (_connectedDevices.isEmpty) return false;
     try {
-      // Find position characteristic
-      final positionChar = service.characteristics.firstWhere(
-        (char) => char.uuid.toString() == positionCharacteristicUuid,
-        orElse: () => throw Exception('Position characteristic not found'),
-      );
-      
-      // Find vehicle data characteristic
-      final vehicleDataChar = service.characteristics.firstWhere(
-        (char) => char.uuid.toString() == vehicleDataCharacteristicUuid,
-        orElse: () => throw Exception('Vehicle data characteristic not found'),
-      );
-      
-      // Subscribe to notifications
-      await positionChar.setNotifyValue(true);
-      positionChar.lastValueStream.listen(_onPositionDataReceived);
-      
-      await vehicleDataChar.setNotifyValue(true);
-      vehicleDataChar.lastValueStream.listen(_onVehicleDataReceived);
-      
-      debugPrint('MeshNetworkService: Characteristics setup complete');
-    } catch (e) {
-      debugPrint('MeshNetworkService: Error setting up characteristics: $e');
-    }
-  }
-  
-  /// Handle received position data
-  void _onPositionDataReceived(List<int> data) {
-    try {
-      final jsonString = utf8.decode(data);
-      final positionData = PositionData.fromJsonString(jsonString);
-      
-      _sharedPositions[positionData.deviceId] = positionData;
-      _positionReceivedController.add(positionData);
-      
-      // Update device position
-      if (_discoveredDevices.containsKey(positionData.deviceId)) {
-        _discoveredDevices[positionData.deviceId] = _discoveredDevices[positionData.deviceId]!.copyWith(
-          lastKnownPosition: positionData,
-          lastDataUpdate: DateTime.now(),
-        );
+      for (final entry in _positionCharacteristics.entries) {
+        if (_connectedDevices.containsKey(entry.key)) {
+          await entry.value.write(data.toBytes());
+        }
       }
-      
-      notifyListeners();
-      debugPrint('MeshNetworkService: Received position data from ${positionData.deviceId}');
-    } catch (e) {
-      debugPrint('MeshNetworkService: Error processing position data: $e');
-    }
-  }
-  
-  /// Handle received vehicle data
-  void _onVehicleDataReceived(List<int> data) {
-    try {
-      final jsonString = utf8.decode(data);
-      final vehicleData = VehicleData.fromJsonString(jsonString);
-      
-      _sharedVehicleData[vehicleData.deviceId] = vehicleData;
-      _vehicleDataReceivedController.add(vehicleData);
-      
-      notifyListeners();
-      debugPrint('MeshNetworkService: Received vehicle data from ${vehicleData.deviceId}');
-    } catch (e) {
-      debugPrint('MeshNetworkService: Error processing vehicle data: $e');
-    }
-  }
-  
-  /// Broadcast position data to connected devices
-  Future<bool> broadcastPositionData(PositionData positionData) async {
-    if (_connectedDevices.isEmpty) {
-      debugPrint('MeshNetworkService: No connected devices to broadcast to');
-      return false;
-    }
-    
-    try {
-      final jsonData = utf8.encode(positionData.toJsonString());
-      
-      for (final device in _connectedDevices.values) {
-        // Find the position characteristic and write data
-        final services = await device.discoverServices();
-        final naviSafeService = services.firstWhere(
-          (service) => service.uuid.toString() == naviSafeServiceUuid,
-        );
-        
-        final positionChar = naviSafeService.characteristics.firstWhere(
-          (char) => char.uuid.toString() == positionCharacteristicUuid,
-        );
-        
-        await positionChar.write(jsonData);
-      }
-      
-      debugPrint('MeshNetworkService: Broadcasted position data to ${_connectedDevices.length} devices');
       return true;
     } catch (e) {
       debugPrint('MeshNetworkService: Error broadcasting position data: $e');
       return false;
     }
   }
-  
-  /// Broadcast vehicle data to connected devices
-  Future<bool> broadcastVehicleData(VehicleData vehicleData) async {
-    if (_connectedDevices.isEmpty) {
-      debugPrint('MeshNetworkService: No connected devices to broadcast to');
-      return false;
-    }
-    
-    try {
-      final jsonData = utf8.encode(vehicleData.toJsonString());
-      
-      for (final device in _connectedDevices.values) {
-        // Find the vehicle data characteristic and write data
-        final services = await device.discoverServices();
-        final naviSafeService = services.firstWhere(
-          (service) => service.uuid.toString() == naviSafeServiceUuid,
-        );
-        
-        final vehicleDataChar = naviSafeService.characteristics.firstWhere(
-          (char) => char.uuid.toString() == vehicleDataCharacteristicUuid,
-        );
-        
-        await vehicleDataChar.write(jsonData);
-      }
-      
-      debugPrint('MeshNetworkService: Broadcasted vehicle data to ${_connectedDevices.length} devices');
-      return true;
-    } catch (e) {
-      debugPrint('MeshNetworkService: Error broadcasting vehicle data: $e');
-      return false;
-    }
-  }
-  
-  /// Disconnect from a specific device
-  Future<void> disconnectFromDevice(String deviceId) async {
+
+  /// Handle device disconnection
+  void _handleDeviceDisconnected(String deviceId) {
     final device = _connectedDevices[deviceId];
     if (device == null) return;
-    
-    try {
-      await device.disconnect();
-      _connectedDevices.remove(deviceId);
-      
-      // Update device status
-      if (_discoveredDevices.containsKey(deviceId)) {
-        _discoveredDevices[deviceId] = _discoveredDevices[deviceId]!.copyWith(
-          status: NetworkDeviceStatus.offline,
-        );
-      }
-      
-      notifyListeners();
-      _networkStatusController.add('Disconnected from device');
-      
-      debugPrint('MeshNetworkService: Disconnected from device: $deviceId');
-    } catch (e) {
-      debugPrint('MeshNetworkService: Error disconnecting from device: $e');
-    }
+
+    // Clean up all resources associated with this device
+    _connectedDevices.remove(deviceId);
+    _positionCharacteristics.remove(deviceId);
+    _vehicleDataCharacteristics.remove(deviceId);
+    _connectionSubscriptions[deviceId]?.cancel();
+    _connectionSubscriptions.remove(deviceId);
+
+    _networkStatusController.add('Device disconnected');
   }
-  
-  /// Disconnect from all devices
-  Future<void> disconnectAll() async {
-    final deviceIds = List<String>.from(_connectedDevices.keys);
-    for (final deviceId in deviceIds) {
-      await disconnectFromDevice(deviceId);
-    }
-  }
-  
-  /// Get network statistics
-  Map<String, dynamic> getNetworkStatistics() {
-    final connectedCount = _connectedDevices.length;
-    final discoveredCount = _discoveredDevices.length;
-    final avgSignalStrength = _discoveredDevices.values.isEmpty
-        ? 0
-        : _discoveredDevices.values
-            .map((d) => d.signalQuality)
-            .reduce((a, b) => a + b) / _discoveredDevices.values.length;
-    
-    return {
-      'connectedDevices': connectedCount,
-      'discoveredDevices': discoveredCount,
-      'averageSignalStrength': avgSignalStrength.round(),
-      'dataTransferActive': _sharedPositions.isNotEmpty,
-      'networkHealth': connectedCount > 0 ? 'Good' : 'No connections',
-    };
-  }
-  
-  /// Check if device is suitable for cooperative positioning
-  bool isDeviceSuitableForCooperativePositioning(String deviceId) {
-    final device = _discoveredDevices[deviceId];
-    if (device == null) return false;
-    
-    return device.capabilities.isSuitableForCooperativePositioning &&
-           device.signalQuality > 30 &&
-           device.hasRecentData;
-  }
-  
-  /// Get devices suitable for cooperative positioning
-  List<NetworkDevice> get cooperativePositioningDevices {
-    return _discoveredDevices.values
-        .where((device) => isDeviceSuitableForCooperativePositioning(device.deviceId))
-        .toList()
-      ..sort((a, b) => b.cooperativePositioningPriority.compareTo(a.cooperativePositioningPriority));
-  }
-  
-  /// Dispose of resources
+
   @override
   void dispose() {
-    disconnectAll();
-    stopScanning();
+    _stopContinuousScanning();
+    _blePeripheral.stop();
+
+    // Cancel all connection subscriptions
+    _connectionSubscriptions.values.forEach((sub) => sub.cancel());
+    _connectionSubscriptions.clear();
+
+    // Close all stream controllers
     _deviceDiscoveredController.close();
     _positionReceivedController.close();
     _vehicleDataReceivedController.close();
     _networkStatusController.close();
+
     super.dispose();
+  }
+
+  Future<void> _generateServiceUuid() async {
+    try {
+      final pkg = await PackageInfo.fromPlatform();
+      final packageName = (pkg.packageName.isNotEmpty)
+          ? pkg.packageName
+          : pkg.appName;
+      final uid = Uuid();
+      naviSafeServiceUuid = uid.v5(Uuid.NAMESPACE_URL, packageName);
+      naviSafeServiceGuid = Guid(naviSafeServiceUuid);
+      debugPrint(
+        'MeshNetworkService: Generated NaviSafe service UUID: $naviSafeServiceUuid from package: $packageName',
+      );
+    } catch (e) {
+      naviSafeServiceUuid = '12345678-1234-1234-1234-123456789abc';
+      naviSafeServiceGuid = Guid(naviSafeServiceUuid);
+      debugPrint(
+        'MeshNetworkService: Failed to derive package name, using fallback UUID $naviSafeServiceUuid - error: $e',
+      );
+    }
   }
 }

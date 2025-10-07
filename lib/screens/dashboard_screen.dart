@@ -36,9 +36,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isSelectingSource = false;
   bool _isSelectingDestination = false;
   
+  // Map optimization: throttle updates to prevent buffer overflow
+  DateTime _lastMapUpdate = DateTime.now();
+  static const Duration _mapUpdateThrottle = Duration(milliseconds: 500);
+  late MapController _mapController;
+  
   @override
   void initState() {
     super.initState();
+    _mapController = MapController();
     _initializeServices();
   }
   
@@ -48,14 +54,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _clusterManager = context.read<MobileClusterManager>();
     _collisionService = context.read<CollisionDetectionService>();
     
-    // Listen to position updates
+    // Listen to position updates with throttling to prevent excessive map redraws
     _kalmanService.onPositionUpdate = (position, speed, heading) {
       if (mounted) {
+        final now = DateTime.now();
+        final shouldUpdateMap = now.difference(_lastMapUpdate) > _mapUpdateThrottle;
+        
         setState(() {
           _currentPosition = position;
           _currentSpeed = speed;
           _currentHeading = heading;
         });
+        
+        // Only update map center if enough time has passed and position changed significantly
+        if (shouldUpdateMap) {
+          _lastMapUpdate = now;
+          // Move map to follow current position smoothly
+          _mapController.move(position, _mapController.camera.zoom);
+        }
       }
     };
     
@@ -161,9 +177,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Stack(
               children: [
                 FlutterMap(
+                  mapController: _mapController,
                   options: MapOptions(
                     initialCenter: _currentPosition,
                     initialZoom: 16.0,
+                    // Reduce update frequency to prevent buffer overflow
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                    ),
                     onTap: (tapPosition, point) {
                       setState(() {
                         if (_isSelectingSource) {
@@ -511,6 +532,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   
   @override
   void dispose() {
+    _mapController.dispose();
     super.dispose();
   }
 }

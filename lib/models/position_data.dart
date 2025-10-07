@@ -33,11 +33,15 @@ class PositionData {
       deviceId: json['deviceId'] as String,
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
-      altitude: json['altitude'] != null ? (json['altitude'] as num).toDouble() : null,
+      altitude: json['altitude'] != null
+          ? (json['altitude'] as num).toDouble()
+          : null,
       accuracy: (json['accuracy'] as num).toDouble(),
       timestamp: DateTime.parse(json['timestamp'] as String),
       speed: json['speed'] != null ? (json['speed'] as num).toDouble() : null,
-      heading: json['heading'] != null ? (json['heading'] as num).toDouble() : null,
+      heading: json['heading'] != null
+          ? (json['heading'] as num).toDouble()
+          : null,
       positioningMode: json['positioningMode'] as String? ?? 'GPS',
       metadata: json['metadata'] as Map<String, dynamic>?,
     );
@@ -59,22 +63,40 @@ class PositionData {
     };
   }
 
+  /// Convert to bytes for BLE transmission
+  List<int> toBytes() {
+    final json = jsonEncode(toJson());
+    return utf8.encode(json);
+  }
+
   /// Convert to JSON string for BLE transmission
   String toJsonString() => json.encode(toJson());
 
   /// Create PositionData from JSON string
   factory PositionData.fromJsonString(String jsonString) {
-    return PositionData.fromJson(json.decode(jsonString) as Map<String, dynamic>);
+    return PositionData.fromJson(
+      json.decode(jsonString) as Map<String, dynamic>,
+    );
   }
 
   /// Calculate distance to another position in meters
   double distanceTo(PositionData other) {
-    return _calculateDistance(latitude, longitude, other.latitude, other.longitude);
+    return _calculateDistance(
+      latitude,
+      longitude,
+      other.latitude,
+      other.longitude,
+    );
   }
 
   /// Calculate bearing to another position in degrees
   double bearingTo(PositionData other) {
-    return _calculateBearing(latitude, longitude, other.latitude, other.longitude);
+    return _calculateBearing(
+      latitude,
+      longitude,
+      other.latitude,
+      other.longitude,
+    );
   }
 
   /// Check if position is recent (within specified seconds)
@@ -112,7 +134,7 @@ class PositionData {
   @override
   String toString() {
     return 'PositionData(deviceId: $deviceId, lat: $latitude, lng: $longitude, '
-           'accuracy: ${accuracy}m, mode: $positioningMode, time: $timestamp)';
+        'accuracy: ${accuracy}m, mode: $positioningMode, time: $timestamp)';
   }
 
   @override
@@ -136,16 +158,19 @@ class PositionData {
 /// Calculate distance between two points using Haversine formula
 double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
   const double earthRadius = 6371000; // Earth radius in meters
-  
+
   final double dLat = _toRadians(lat2 - lat1);
   final double dLon = _toRadians(lon2 - lon1);
-  
-  final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2)) *
-      math.sin(dLon / 2) * math.sin(dLon / 2);
-  
+
+  final double a =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(_toRadians(lat1)) *
+          math.cos(_toRadians(lat2)) *
+          math.sin(dLon / 2) *
+          math.sin(dLon / 2);
+
   final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-  
+
   return earthRadius * c;
 }
 
@@ -154,13 +179,14 @@ double _calculateBearing(double lat1, double lon1, double lat2, double lon2) {
   final double dLon = _toRadians(lon2 - lon1);
   final double lat1Rad = _toRadians(lat1);
   final double lat2Rad = _toRadians(lat2);
-  
+
   final double y = math.sin(dLon) * math.cos(lat2Rad);
-  final double x = math.cos(lat1Rad) * math.sin(lat2Rad) -
+  final double x =
+      math.cos(lat1Rad) * math.sin(lat2Rad) -
       math.sin(lat1Rad) * math.cos(lat2Rad) * math.cos(dLon);
-  
+
   final double bearing = math.atan2(y, x);
-  
+
   return (_toDegrees(bearing) + 360) % 360;
 }
 
