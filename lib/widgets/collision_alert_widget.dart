@@ -81,35 +81,67 @@ class _CollisionAlertWidgetState extends State<CollisionAlertWidget>
 
   Widget _buildAlertOverlay(SimpleCollisionAlert alert) {
     return Positioned(
-      top: 80,
-      left: 16,
-      right: 16,
-      child: AnimatedBuilder(
-        animation: _animationController,
-        builder: (context, child) {
-          return Transform.scale(
+      top: 90,
+      left: 20,
+      right: 20,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxHeight: 120,
+          minHeight: 80,
+        ),
+        child: AnimatedBuilder(
+          animation: _animationController,
+          builder: (context, child) {
+            return Transform.scale(
             scale: _scaleAnimation.value,
             child: Opacity(
               opacity: _opacityAnimation.value,
               child: Material(
                 color: Colors.transparent,
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: _getAlertColor(alert),
-                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        _getAlertColor(alert),
+                        _getAlertColor(alert).withOpacity(0.8),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.2),
+                      width: 1,
+                    ),
                     boxShadow: [
                       BoxShadow(
+                        color: _getAlertColor(alert).withOpacity(0.4),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
                         color: Colors.black.withOpacity(0.3),
-                        blurRadius: 10,
+                        blurRadius: 15,
                         offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: Row(
                     children: [
-                      Icon(_getAlertIcon(alert), color: Colors.white, size: 28),
-                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _getAlertIcon(alert), 
+                          color: Colors.white, 
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,16 +151,20 @@ class _CollisionAlertWidgetState extends State<CollisionAlertWidget>
                               _getAlertTitle(alert),
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 16,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Text(
                               alert.message,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 14,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
@@ -136,10 +172,17 @@ class _CollisionAlertWidgetState extends State<CollisionAlertWidget>
                       ),
                       GestureDetector(
                         onTap: _hideAlert,
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 20,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                         ),
                       ),
                     ],
@@ -149,6 +192,7 @@ class _CollisionAlertWidgetState extends State<CollisionAlertWidget>
             ),
           );
         },
+        ),
       ),
     );
   }

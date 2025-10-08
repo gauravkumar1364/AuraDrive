@@ -236,55 +236,71 @@ class MeshNetworkService extends ChangeNotifier {
     if (_isScanning) return;
 
     try {
+      debugPrint('MeshNetworkService: Starting BLE scan for all devices...');
+      
       // Subscribe to scan results
       _scanResultsSubscription?.cancel();
       _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
+        debugPrint('MeshNetworkService: Scan found ${results.length} devices');
+        
         for (final result in results) {
-          if (result.advertisementData.serviceUuids.any(
+          final deviceId = result.device.remoteId.toString();
+          final deviceName = result.advertisementData.localName.isNotEmpty
+              ? result.advertisementData.localName
+              : result.device.platformName.isNotEmpty
+                  ? result.device.platformName
+                  : 'Unknown Device ${deviceId.substring(0, 4)}';
+
+          debugPrint('MeshNetworkService: Found device $deviceName (RSSI: ${result.rssi})');
+
+          // Check if it's a NaviSafe device
+          final isNaviSafe = result.advertisementData.serviceUuids.any(
                 (uuid) =>
                     uuid.toString().toLowerCase() ==
                     naviSafeServiceUuid.toLowerCase(),
               ) ||
-              result.advertisementData.localName.startsWith('NaviSafe')) {
-            final deviceId = result.device.remoteId.toString();
-            final device = NetworkDevice(
-              deviceId: deviceId,
-              deviceName: result.advertisementData.localName.isNotEmpty
-                  ? result.advertisementData.localName
-                  : 'NaviSafe Device ${deviceId.substring(0, 4)}',
-              lastSeen: DateTime.now(),
-              connectionStrength: result.rssi,
-              status: result.device.isConnected
-                  ? NetworkDeviceStatus.connected
-                  : NetworkDeviceStatus.offline,
-              capabilities: DeviceCapabilities(
-                supportsRawGnss: true,
-                supportsNavIC: false,
-                supportsBluetooth: true,
-                supportsWifi: false,
-                supportsAccelerometer: true,
-                supportsGyroscope: true,
-                supportsMagnetometer: true,
-              ),
+              result.advertisementData.localName.startsWith('NaviSafe');
+
+          final device = NetworkDevice(
+            deviceId: deviceId,
+            deviceName: deviceName,
+            lastSeen: DateTime.now(),
+            connectionStrength: result.rssi,
+            status: result.device.isConnected
+                ? NetworkDeviceStatus.connected
+                : NetworkDeviceStatus.offline,
+            capabilities: DeviceCapabilities(
+              supportsRawGnss: isNaviSafe,
+              supportsNavIC: false,
+              supportsBluetooth: true,
+              supportsWifi: false,
+              supportsAccelerometer: isNaviSafe,
+              supportsGyroscope: isNaviSafe,
+              supportsMagnetometer: isNaviSafe,
+            ),
+          );
+          
+          // Only add devices with acceptable signal strength
+          if (result.rssi > minRssiThreshold) {
+            _discoveredDevices[device.deviceId] = device;
+            _deviceDiscoveredController.add(device);
+            notifyListeners();
+            debugPrint(
+              'MeshNetworkService: Added ${isNaviSafe ? 'NaviSafe' : 'BLE'} device ${device.deviceName} with RSSI ${result.rssi}',
             );
-            // Only add devices with acceptable signal strength
-            if (result.rssi > minRssiThreshold) {
-              _discoveredDevices[device.deviceId] = device;
-              _deviceDiscoveredController.add(device);
-              notifyListeners();
-              debugPrint(
-                'MeshNetworkService: Discovered device ${device.deviceName} with RSSI ${result.rssi}',
-              );
-            }
+          } else {
+            debugPrint(
+              'MeshNetworkService: Rejected device ${device.deviceName} - RSSI ${result.rssi} below threshold $minRssiThreshold',
+            );
           }
         }
       });
 
-      // Start scanning with optimized settings
+      // Start scanning with optimized settings for all BLE devices
       await FlutterBluePlus.startScan(
         timeout: const Duration(seconds: 30),
         androidUsesFineLocation: true,
-        withServices: [Guid(naviSafeServiceUuid)], // Filter for our service
+        // Remove service filter to discover all BLE devices
       );
       _isScanning = true;
       notifyListeners();

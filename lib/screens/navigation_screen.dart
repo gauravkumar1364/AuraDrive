@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -341,15 +342,33 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return circles;
   }
 
-  /// Build status bar widget
+  /// Build enhanced status bar widget
   Widget _buildStatusBar() {
     return Container(
-      height: 80,
+      constraints: BoxConstraints(
+        minHeight: 70,
+        maxHeight: 85,
+      ),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.8),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.grey[850]!.withOpacity(0.95),
+            Colors.grey[900]!.withOpacity(0.98),
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, -3),
+          ),
+        ],
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           Expanded(
             child: _buildStatusItem(
@@ -367,6 +386,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     children: [
                       Text(
                         '${service.satelliteCount} sats',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.white,
@@ -374,6 +395,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                       ),
                       Text(
                         service.currentQuality!.qualityDescription,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 10, color: Colors.grey[300]),
                       ),
                     ],
@@ -394,6 +417,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     children: [
                       Text(
                         '${service.connectedDeviceCount} devices',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.white,
@@ -401,6 +426,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                       ),
                       Text(
                         service.isScanning ? 'Scanning...' : 'Idle',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 10, color: Colors.grey[300]),
                       ),
                     ],
@@ -422,6 +449,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     children: [
                       Text(
                         service.isMonitoring ? 'Active' : 'Stopped',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,
                           color: service.isMonitoring
@@ -433,6 +462,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                         recentAlertsCount > 0
                             ? '$recentAlertsCount alerts'
                             : 'No alerts',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 10,
                           color: recentAlertsCount > 0
@@ -451,24 +482,49 @@ class _NavigationScreenState extends State<NavigationScreen> {
     );
   }
 
-  /// Build individual status item
+  /// Build enhanced individual status item
   Widget _buildStatusItem(String title, IconData icon, Widget content) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, color: Colors.white, size: 20),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
+    return Flexible(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: Colors.grey[800]!.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Colors.grey[600]!.withOpacity(0.3),
+            width: 1,
           ),
         ),
-        const SizedBox(height: 2),
-        content,
-      ],
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.blue[600]!.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(icon, color: Colors.blue[300], size: 16),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.grey[300],
+                fontSize: 8,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 2),
+            content,
+          ],
+        ),
+      ),
     );
   }
 
@@ -477,102 +533,190 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        FloatingActionButton(
-          mini: true,
-          heroTag: 'location',
-          onPressed: () {
-            setState(() {
-              _isFollowingLocation = !_isFollowingLocation;
-            });
-            if (_isFollowingLocation && _currentPosition != null) {
-              _mapController.move(_currentPosition!, _currentZoom);
-            }
-          },
-          backgroundColor: _isFollowingLocation ? Colors.blue : Colors.grey,
-          child: Icon(
-            _isFollowingLocation ? Icons.my_location : Icons.location_disabled,
-            color: Colors.white,
+        // Enhanced Location button
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: FloatingActionButton(
+            mini: true,
+            heroTag: 'location',
+            onPressed: () {
+              setState(() {
+                _isFollowingLocation = !_isFollowingLocation;
+              });
+              if (_isFollowingLocation && _currentPosition != null) {
+                _mapController.move(_currentPosition!, _currentZoom);
+              }
+            },
+            backgroundColor: _isFollowingLocation 
+                ? Colors.blue[600] 
+                : Colors.grey[700],
+            elevation: 0,
+            child: Icon(
+              _isFollowingLocation ? Icons.my_location : Icons.location_disabled,
+              color: Colors.white,
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          mini: true,
-          heroTag: 'zoom_in',
-          onPressed: () {
-            setState(() {
-              _currentZoom = (_currentZoom + 1).clamp(3.0, 18.0);
-            });
-            _mapController.move(
-              _currentPosition ?? const LatLng(28.6139, 77.2090),
-              _currentZoom,
-            );
-          },
-          child: const Icon(Icons.zoom_in),
+        const SizedBox(height: 12),
+        // Enhanced Zoom In button
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: FloatingActionButton(
+            mini: true,
+            heroTag: 'zoom_in',
+            onPressed: () {
+              setState(() {
+                _currentZoom = (_currentZoom + 1).clamp(3.0, 18.0);
+              });
+              _mapController.move(
+                _currentPosition ?? const LatLng(28.6139, 77.2090),
+                _currentZoom,
+              );
+            },
+            backgroundColor: Colors.grey[700],
+            elevation: 0,
+            child: const Icon(Icons.zoom_in, color: Colors.white),
+          ),
         ),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          mini: true,
-          heroTag: 'zoom_out',
-          onPressed: () {
-            setState(() {
-              _currentZoom = (_currentZoom - 1).clamp(3.0, 18.0);
-            });
-            _mapController.move(
-              _currentPosition ?? const LatLng(28.6139, 77.2090),
-              _currentZoom,
-            );
-          },
-          child: const Icon(Icons.zoom_out),
+        const SizedBox(height: 12),
+        // Enhanced Zoom Out button
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: FloatingActionButton(
+            mini: true,
+            heroTag: 'zoom_out',
+            onPressed: () {
+              setState(() {
+                _currentZoom = (_currentZoom - 1).clamp(3.0, 18.0);
+              });
+              _mapController.move(
+                _currentPosition ?? const LatLng(28.6139, 77.2090),
+                _currentZoom,
+              );
+            },
+            backgroundColor: Colors.grey[700],
+            elevation: 0,
+            child: const Icon(Icons.zoom_out, color: Colors.white),
+          ),
         ),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          mini: true,
-          heroTag: 'network',
-          onPressed: () {
-            setState(() {
-              _showNetworkPanel = !_showNetworkPanel;
-              if (_showNetworkPanel) _showSafetyPanel = false;
-            });
-          },
-          backgroundColor: _showNetworkPanel
-              ? Theme.of(context).primaryColor
-              : Colors.grey[600],
-          child: const Icon(Icons.device_hub, color: Colors.white),
+        const SizedBox(height: 12),
+        // Enhanced Network button
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: FloatingActionButton(
+            mini: true,
+            heroTag: 'network',
+            onPressed: () {
+              setState(() {
+                _showNetworkPanel = !_showNetworkPanel;
+                if (_showNetworkPanel) _showSafetyPanel = false;
+              });
+            },
+            backgroundColor: _showNetworkPanel
+                ? Colors.blue[600]
+                : Colors.grey[700],
+            elevation: 0,
+            child: const Icon(Icons.device_hub, color: Colors.white),
+          ),
         ),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          mini: true,
-          heroTag: 'safety',
-          onPressed: () {
-            setState(() {
-              _showSafetyPanel = !_showSafetyPanel;
-              if (_showSafetyPanel) _showNetworkPanel = false;
-            });
-          },
-          backgroundColor: _showSafetyPanel
-              ? Theme.of(context).primaryColor
-              : Colors.grey[600],
-          child: const Icon(Icons.security, color: Colors.white),
+        const SizedBox(height: 12),
+        // Enhanced Safety button
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: FloatingActionButton(
+            mini: true,
+            heroTag: 'safety',
+            onPressed: () {
+              setState(() {
+                _showSafetyPanel = !_showSafetyPanel;
+                if (_showSafetyPanel) _showNetworkPanel = false;
+              });
+            },
+            backgroundColor: _showSafetyPanel
+                ? Colors.green[600]
+                : Colors.grey[700],
+            elevation: 0,
+            child: const Icon(Icons.security, color: Colors.white),
+          ),
         ),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          mini: true,
-          heroTag: 'test_alert',
-          onPressed: () {
-            // Test collision alert
-            final service = Provider.of<AccelerometerCollisionService>(
-              context,
-              listen: false,
-            );
-            service.testAlert(
-              type: 'crash',
-              message: 'TEST COLLISION! 15.2G impact',
-              gForce: 15.2,
-              severity: 'high',
-            );
-          },
-          backgroundColor: Colors.red[700],
-          child: const Icon(Icons.warning, color: Colors.white),
+        const SizedBox(height: 12),
+        // Enhanced Test Alert button
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: FloatingActionButton(
+            mini: true,
+            heroTag: 'test_alert',
+            onPressed: () {
+              // Test collision alert
+              final service = Provider.of<AccelerometerCollisionService>(
+                context,
+                listen: false,
+              );
+              service.testAlert(
+                type: 'crash',
+                message: 'TEST COLLISION! 15.2G impact',
+                gForce: 15.2,
+                severity: 'high',
+              );
+            },
+            backgroundColor: Colors.red[700],
+            elevation: 0,
+            child: const Icon(Icons.warning, color: Colors.white),
+          ),
         ),
       ],
     );
@@ -581,60 +725,153 @@ class _NavigationScreenState extends State<NavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[900], // Dark background
       appBar: AppBar(
-        title: const Text('AuraDrive'),
-        backgroundColor: Theme.of(context).primaryColor,
-        foregroundColor: Colors.white,
+        title: Flexible(
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.blue[600]!, Colors.blue[800]!],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'AuraDrive',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: Colors.grey[850],
+        elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         actions: [
-          // Search button
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: _showRouteSearchDialog,
-            tooltip: 'Search Route',
+          // Enhanced Search button
+          Container(
+            margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey[800],
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.search, color: Colors.white),
+              onPressed: _showRouteSearchDialog,
+              tooltip: 'Search Route',
+            ),
           ),
-          // Settings button
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
-            },
+          // Enhanced Settings button
+          Container(
+            margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey[800],
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.settings, color: Colors.white),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                );
+              },
+            ),
           ),
-          // Safety status indicator
+          // Enhanced Safety status indicator
           Consumer<AccelerometerCollisionService>(
             builder: (context, collisionService, child) {
-              // No safety score available - show status instead
               final isMonitoring = collisionService.isMonitoring;
-              final color = isMonitoring ? Colors.green : Colors.red;
+              final alertCount = collisionService.recentAlerts.length;
 
               return Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  isMonitoring
-                      ? 'Collision Detection ON'
-                      : 'Collision Detection OFF',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                  gradient: LinearGradient(
+                    colors: isMonitoring 
+                        ? [Colors.green[600]!, Colors.green[800]!]
+                        : [Colors.red[600]!, Colors.red[800]!],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isMonitoring 
+                          ? Colors.green.withOpacity(0.3)
+                          : Colors.red.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isMonitoring ? Icons.shield : Icons.shield_outlined,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isMonitoring ? 'ACTIVE' : 'OFF',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                    if (alertCount > 0) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[600],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '$alertCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               );
             },
           ),
         ],
       ),
-      body: Stack(
-        children: [
+      body: SafeArea(
+        child: Stack(
+          children: [
           // OpenStreetMap using flutter_map
           FlutterMap(
             mapController: _mapController,
@@ -807,12 +1044,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
               ),
             ),
 
-          // Bottom status bar
-          Positioned(bottom: 0, left: 0, right: 0, child: _buildStatusBar()),
+          // Bottom status bar with SafeArea protection
+          Positioned(
+            bottom: 0, 
+            left: 0, 
+            right: 0, 
+            child: SafeArea(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.15, // Max 15% of screen height
+                  minHeight: 70,
+                ),
+                child: _buildStatusBar(),
+              ),
+            ),
+          ),
 
           // Collision Alert Widget (overlay alerts)
           const CollisionAlertWidget(),
         ],
+        ),
       ),
       floatingActionButton: _buildFloatingControls(),
     );

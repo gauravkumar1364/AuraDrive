@@ -17,12 +17,28 @@ class MeshNetworkWidget extends StatelessWidget {
           child: Container(
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: meshService.isInitialized ? Colors.blue : Colors.grey,
-                width: 2,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.grey[850]!.withOpacity(0.95),
+                  Colors.grey[900]!.withOpacity(0.98),
+                ],
               ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: meshService.isInitialized 
+                    ? Colors.blue[400]!.withOpacity(0.6)
+                    : Colors.grey[600]!.withOpacity(0.4),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -41,23 +57,64 @@ class MeshNetworkWidget extends StatelessWidget {
 
   Widget _buildHeader(MeshNetworkService meshService) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: meshService.isInitialized ? Colors.blue[700] : Colors.grey[700],
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: meshService.isInitialized 
+              ? [Colors.blue[600]!, Colors.blue[800]!]
+              : [Colors.grey[600]!, Colors.grey[800]!],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.white.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
         children: [
-          Icon(Icons.device_hub, color: Colors.white, size: 20),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.device_hub, 
+              color: Colors.white, 
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
           const Text(
             'MESH NETWORK',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
-              fontSize: 14,
+              fontSize: 15,
+              letterSpacing: 0.8,
             ),
           ),
+          const Spacer(),
+          if (meshService.isInitialized)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.green[600],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'ONLINE',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
         ],
       ),
     );
