@@ -237,24 +237,27 @@ class MeshNetworkService extends ChangeNotifier {
 
     try {
       debugPrint('MeshNetworkService: Starting BLE scan for all devices...');
-      
+
       // Subscribe to scan results
       _scanResultsSubscription?.cancel();
       _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
         debugPrint('MeshNetworkService: Scan found ${results.length} devices');
-        
+
         for (final result in results) {
           final deviceId = result.device.remoteId.toString();
           final deviceName = result.advertisementData.localName.isNotEmpty
               ? result.advertisementData.localName
               : result.device.platformName.isNotEmpty
-                  ? result.device.platformName
-                  : 'Unknown Device ${deviceId.substring(0, 4)}';
+              ? result.device.platformName
+              : 'Unknown Device ${deviceId.substring(0, 4)}';
 
-          debugPrint('MeshNetworkService: Found device $deviceName (RSSI: ${result.rssi})');
+          debugPrint(
+            'MeshNetworkService: Found device $deviceName (RSSI: ${result.rssi})',
+          );
 
           // Check if it's a NaviSafe device
-          final isNaviSafe = result.advertisementData.serviceUuids.any(
+          final isNaviSafe =
+              result.advertisementData.serviceUuids.any(
                 (uuid) =>
                     uuid.toString().toLowerCase() ==
                     naviSafeServiceUuid.toLowerCase(),
@@ -279,7 +282,7 @@ class MeshNetworkService extends ChangeNotifier {
               supportsMagnetometer: isNaviSafe,
             ),
           );
-          
+
           // Only add devices with acceptable signal strength
           if (result.rssi > minRssiThreshold) {
             _discoveredDevices[device.deviceId] = device;

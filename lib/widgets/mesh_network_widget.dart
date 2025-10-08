@@ -27,7 +27,7 @@ class MeshNetworkWidget extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: meshService.isInitialized 
+                color: meshService.isInitialized
                     ? Colors.blue[400]!.withOpacity(0.6)
                     : Colors.grey[600]!.withOpacity(0.4),
                 width: 1.5,
@@ -62,16 +62,13 @@ class MeshNetworkWidget extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: meshService.isInitialized 
+          colors: meshService.isInitialized
               ? [Colors.blue[600]!, Colors.blue[800]!]
               : [Colors.grey[600]!, Colors.grey[800]!],
         ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
         border: Border(
-          bottom: BorderSide(
-            color: Colors.white.withOpacity(0.1),
-            width: 1,
-          ),
+          bottom: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
         ),
       ),
       child: Row(
@@ -82,11 +79,7 @@ class MeshNetworkWidget extends StatelessWidget {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.device_hub, 
-              color: Colors.white, 
-              size: 20,
-            ),
+            child: Icon(Icons.device_hub, color: Colors.white, size: 20),
           ),
           const SizedBox(width: 12),
           const Text(

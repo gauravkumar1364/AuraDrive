@@ -345,10 +345,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
   /// Build enhanced status bar widget
   Widget _buildStatusBar() {
     return Container(
-      constraints: BoxConstraints(
-        minHeight: 70,
-        maxHeight: 85,
-      ),
+      height: 63, // Reduced by 2px to fix overflow
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -358,17 +356,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
             Colors.grey[900]!.withOpacity(0.98),
           ],
         ),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, -3),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: _buildStatusItem(
@@ -377,9 +376,19 @@ class _NavigationScreenState extends State<NavigationScreen> {
               Consumer<GnssService>(
                 builder: (context, service, child) {
                   if (!service.isInitialized)
-                    return const Text('Initializing...');
+                    return const Text(
+                      'Init',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 9, color: Colors.white),
+                    );
                   if (service.currentQuality == null)
-                    return const Text('No signal');
+                    return const Text(
+                      'No signal',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 9, color: Colors.white),
+                    );
 
                   return Column(
                     mainAxisSize: MainAxisSize.min,
@@ -388,16 +397,19 @@ class _NavigationScreenState extends State<NavigationScreen> {
                         '${service.satelliteCount} sats',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 10,
                           color: Colors.white,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       Text(
                         service.currentQuality!.qualityDescription,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 10, color: Colors.grey[300]),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 8, color: Colors.grey[400]),
                       ),
                     ],
                   );
@@ -419,16 +431,19 @@ class _NavigationScreenState extends State<NavigationScreen> {
                         '${service.connectedDeviceCount} devices',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 10,
                           color: Colors.white,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       Text(
-                        service.isScanning ? 'Scanning...' : 'Idle',
+                        service.isScanning ? 'Scan' : 'Idle',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 10, color: Colors.grey[300]),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 8, color: Colors.grey[400]),
                       ),
                     ],
                   );
@@ -448,11 +463,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        service.isMonitoring ? 'Active' : 'Stopped',
+                        service.isMonitoring ? 'Active' : 'Off',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
                           color: service.isMonitoring
                               ? Colors.green
                               : Colors.red,
@@ -460,15 +477,16 @@ class _NavigationScreenState extends State<NavigationScreen> {
                       ),
                       Text(
                         recentAlertsCount > 0
-                            ? '$recentAlertsCount alerts'
-                            : 'No alerts',
+                            ? '$recentAlertsCount alert${recentAlertsCount > 1 ? 's' : ''}'
+                            : 'None',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 8,
                           color: recentAlertsCount > 0
                               ? Colors.orange[300]
-                              : Colors.grey[300],
+                              : Colors.grey[400],
                         ),
                       ),
                     ],
@@ -486,42 +504,35 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Widget _buildStatusItem(String title, IconData icon, Widget content) {
     return Flexible(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        margin: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        margin: const EdgeInsets.symmetric(horizontal: 3),
         decoration: BoxDecoration(
-          color: Colors.grey[800]!.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: Colors.grey[600]!.withOpacity(0.3),
-            width: 1,
-          ),
+          color: Colors.grey[800]!.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.blue[600]!.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(icon, color: Colors.blue[300], size: 16),
-            ),
-            const SizedBox(height: 4),
+            Icon(icon, color: Colors.blue[300], size: 18),
+            const SizedBox(height: 2),
             Text(
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.grey[300],
+                color: Colors.grey[400],
                 fontSize: 8,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 2),
-            content,
+            const SizedBox(height: 1),
+            DefaultTextStyle(
+              style: const TextStyle(fontSize: 9),
+              child: content,
+            ),
           ],
         ),
       ),
@@ -530,195 +541,168 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   /// Build floating controls
   Widget _buildFloatingControls() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Enhanced Location button
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
+    return Padding(
+      padding: const EdgeInsets.only(
+        bottom: 70,
+      ), // Add padding to stay above footer
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Enhanced Location button
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              mini: true,
+              heroTag: 'location',
+              onPressed: () {
+                setState(() {
+                  _isFollowingLocation = !_isFollowingLocation;
+                });
+                if (_isFollowingLocation && _currentPosition != null) {
+                  _mapController.move(_currentPosition!, _currentZoom);
+                }
+              },
+              backgroundColor: _isFollowingLocation
+                  ? Colors.blue[600]
+                  : Colors.grey[700],
+              elevation: 0,
+              child: Icon(
+                _isFollowingLocation
+                    ? Icons.my_location
+                    : Icons.location_disabled,
+                color: Colors.white,
               ),
-            ],
-          ),
-          child: FloatingActionButton(
-            mini: true,
-            heroTag: 'location',
-            onPressed: () {
-              setState(() {
-                _isFollowingLocation = !_isFollowingLocation;
-              });
-              if (_isFollowingLocation && _currentPosition != null) {
-                _mapController.move(_currentPosition!, _currentZoom);
-              }
-            },
-            backgroundColor: _isFollowingLocation 
-                ? Colors.blue[600] 
-                : Colors.grey[700],
-            elevation: 0,
-            child: Icon(
-              _isFollowingLocation ? Icons.my_location : Icons.location_disabled,
-              color: Colors.white,
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        // Enhanced Zoom In button
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
+          const SizedBox(height: 12),
+          // Enhanced Zoom In button
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              mini: true,
+              heroTag: 'zoom_in',
+              onPressed: () {
+                setState(() {
+                  _currentZoom = (_currentZoom + 1).clamp(3.0, 18.0);
+                });
+                _mapController.move(
+                  _currentPosition ?? const LatLng(28.6139, 77.2090),
+                  _currentZoom,
+                );
+              },
+              backgroundColor: Colors.grey[700],
+              elevation: 0,
+              child: const Icon(Icons.zoom_in, color: Colors.white),
+            ),
           ),
-          child: FloatingActionButton(
-            mini: true,
-            heroTag: 'zoom_in',
-            onPressed: () {
-              setState(() {
-                _currentZoom = (_currentZoom + 1).clamp(3.0, 18.0);
-              });
-              _mapController.move(
-                _currentPosition ?? const LatLng(28.6139, 77.2090),
-                _currentZoom,
-              );
-            },
-            backgroundColor: Colors.grey[700],
-            elevation: 0,
-            child: const Icon(Icons.zoom_in, color: Colors.white),
+          const SizedBox(height: 12),
+          // Enhanced Zoom Out button
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              mini: true,
+              heroTag: 'zoom_out',
+              onPressed: () {
+                setState(() {
+                  _currentZoom = (_currentZoom - 1).clamp(3.0, 18.0);
+                });
+                _mapController.move(
+                  _currentPosition ?? const LatLng(28.6139, 77.2090),
+                  _currentZoom,
+                );
+              },
+              backgroundColor: Colors.grey[700],
+              elevation: 0,
+              child: const Icon(Icons.zoom_out, color: Colors.white),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        // Enhanced Zoom Out button
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
+          const SizedBox(height: 12),
+          // Enhanced Network button
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              mini: true,
+              heroTag: 'network',
+              onPressed: () {
+                setState(() {
+                  _showNetworkPanel = !_showNetworkPanel;
+                  if (_showNetworkPanel) _showSafetyPanel = false;
+                });
+              },
+              backgroundColor: _showNetworkPanel
+                  ? Colors.blue[600]
+                  : Colors.grey[700],
+              elevation: 0,
+              child: const Icon(Icons.device_hub, color: Colors.white),
+            ),
           ),
-          child: FloatingActionButton(
-            mini: true,
-            heroTag: 'zoom_out',
-            onPressed: () {
-              setState(() {
-                _currentZoom = (_currentZoom - 1).clamp(3.0, 18.0);
-              });
-              _mapController.move(
-                _currentPosition ?? const LatLng(28.6139, 77.2090),
-                _currentZoom,
-              );
-            },
-            backgroundColor: Colors.grey[700],
-            elevation: 0,
-            child: const Icon(Icons.zoom_out, color: Colors.white),
+          const SizedBox(height: 12),
+          // Enhanced Safety button
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              mini: true,
+              heroTag: 'safety',
+              onPressed: () {
+                setState(() {
+                  _showSafetyPanel = !_showSafetyPanel;
+                  if (_showSafetyPanel) _showNetworkPanel = false;
+                });
+              },
+              backgroundColor: _showSafetyPanel
+                  ? Colors.green[600]
+                  : Colors.grey[700],
+              elevation: 0,
+              child: const Icon(Icons.security, color: Colors.white),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        // Enhanced Network button
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: FloatingActionButton(
-            mini: true,
-            heroTag: 'network',
-            onPressed: () {
-              setState(() {
-                _showNetworkPanel = !_showNetworkPanel;
-                if (_showNetworkPanel) _showSafetyPanel = false;
-              });
-            },
-            backgroundColor: _showNetworkPanel
-                ? Colors.blue[600]
-                : Colors.grey[700],
-            elevation: 0,
-            child: const Icon(Icons.device_hub, color: Colors.white),
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Enhanced Safety button
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: FloatingActionButton(
-            mini: true,
-            heroTag: 'safety',
-            onPressed: () {
-              setState(() {
-                _showSafetyPanel = !_showSafetyPanel;
-                if (_showSafetyPanel) _showNetworkPanel = false;
-              });
-            },
-            backgroundColor: _showSafetyPanel
-                ? Colors.green[600]
-                : Colors.grey[700],
-            elevation: 0,
-            child: const Icon(Icons.security, color: Colors.white),
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Enhanced Test Alert button
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.red.withOpacity(0.4),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: FloatingActionButton(
-            mini: true,
-            heroTag: 'test_alert',
-            onPressed: () {
-              // Test collision alert
-              final service = Provider.of<AccelerometerCollisionService>(
-                context,
-                listen: false,
-              );
-              service.testAlert(
-                type: 'crash',
-                message: 'TEST COLLISION! 15.2G impact',
-                gForce: 15.2,
-                severity: 'high',
-              );
-            },
-            backgroundColor: Colors.red[700],
-            elevation: 0,
-            child: const Icon(Icons.warning, color: Colors.white),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -727,10 +711,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[900], // Dark background
       appBar: AppBar(
-        title: Flexible(
-          child: Row(
-            children: [
-              Container(
+        automaticallyImplyLeading: false, // Remove back button
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -742,6 +728,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 ),
                 child: const Text(
                   'AuraDrive',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -749,8 +737,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
         backgroundColor: Colors.grey[850],
         elevation: 0,
@@ -794,7 +782,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
               icon: const Icon(Icons.settings, color: Colors.white),
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
                 );
               },
             ),
@@ -807,10 +797,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
               return Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: isMonitoring 
+                    colors: isMonitoring
                         ? [Colors.green[600]!, Colors.green[800]!]
                         : [Colors.red[600]!, Colors.red[800]!],
                     begin: Alignment.topCenter,
@@ -819,7 +812,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: isMonitoring 
+                      color: isMonitoring
                           ? Colors.green.withOpacity(0.3)
                           : Colors.red.withOpacity(0.3),
                       blurRadius: 4,
@@ -847,7 +840,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     if (alertCount > 0) ...[
                       const SizedBox(width: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.orange[600],
                           borderRadius: BorderRadius.circular(8),
@@ -872,197 +868,189 @@ class _NavigationScreenState extends State<NavigationScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-          // OpenStreetMap using flutter_map
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter:
-                  _currentPosition ??
-                  const LatLng(28.6139, 77.2090), // Default to Delhi
-              initialZoom: _currentZoom,
-              minZoom: 3.0,
-              maxZoom: 20.0,
-              keepAlive: true,
-              onTap: (tapPosition, point) {
-                setState(() {
-                  _isFollowingLocation = false;
-                });
-              },
-            ),
-            children: [
-              // Google Maps-like colorful tiles
-              TileLayer(
-                urlTemplate:
-                    'https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}',
-                userAgentPackageName: 'com.aura.drive',
-                maxZoom: 20,
+            // OpenStreetMap using flutter_map
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter:
+                    _currentPosition ??
+                    const LatLng(28.6139, 77.2090), // Default to Delhi
+                initialZoom: _currentZoom,
+                minZoom: 3.0,
+                maxZoom: 20.0,
+                keepAlive: true,
+                onTap: (tapPosition, point) {
+                  setState(() {
+                    _isFollowingLocation = false;
+                  });
+                },
               ),
+              children: [
+                // Google Maps-like colorful tiles
+                TileLayer(
+                  urlTemplate:
+                      'https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}',
+                  userAgentPackageName: 'com.aura.drive',
+                  maxZoom: 20,
+                ),
 
-              // Proximity circles
-              CircleLayer(circles: _buildProximityCircles()),
+                // Proximity circles
+                CircleLayer(circles: _buildProximityCircles()),
 
-              // Route polyline (if both source and destination are set)
-              if (_routePoints.isNotEmpty)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _routePoints,
-                      strokeWidth: 6.0,
-                      color: Colors.blue.shade600,
-                      borderStrokeWidth: 3.0,
-                      borderColor: Colors.white.withOpacity(0.5),
+                // Route polyline (if both source and destination are set)
+                if (_routePoints.isNotEmpty)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _routePoints,
+                        strokeWidth: 6.0,
+                        color: Colors.blue.shade600,
+                        borderStrokeWidth: 3.0,
+                        borderColor: Colors.white.withOpacity(0.5),
+                      ),
+                    ],
+                  ),
+
+                // Vehicle and alert markers
+                MarkerLayer(markers: _buildMarkers()),
+
+                // Attribution
+                RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution(
+                      AppConfig.osmAttributionText,
+                      onTap: () {
+                        // TODO: Open OSM attribution page
+                      },
                     ),
                   ],
                 ),
-
-              // Vehicle and alert markers
-              MarkerLayer(markers: _buildMarkers()),
-
-              // Attribution
-              RichAttributionWidget(
-                attributions: [
-                  TextSourceAttribution(
-                    AppConfig.osmAttributionText,
-                    onTap: () {
-                      // TODO: Open OSM attribution page
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          // Route info banner (top center)
-          if (_routeInfo != null)
-            Positioned(
-              top: 10,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Material(
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blue, width: 2),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.directions_car,
-                          color: Colors.blue,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${_routeInfo!.formattedDistance} • ${_routeInfo!.formattedDuration}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (_isCalculatingRoute)
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              setState(() {
-                                _sourcePosition = null;
-                                _destinationPosition = null;
-                                _routePoints = [];
-                                _routeInfo = null;
-                              });
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              ],
             ),
 
-          // Calculating route overlay
-          if (_isCalculatingRoute)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black26,
-                child: const Center(
-                  child: Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(20.0),
-                      child: Column(
+            // Route info banner (top center)
+            if (_routeInfo != null)
+              Positioned(
+                top: 10,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Material(
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.blue, width: 2),
+                      ),
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
+                          const Icon(
+                            Icons.directions_car,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            'Calculating route...',
-                            style: TextStyle(
-                              fontSize: 16,
+                            '${_routeInfo!.formattedDistance} • ${_routeInfo!.formattedDuration}',
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          if (_isCalculatingRoute)
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () {
+                                setState(() {
+                                  _sourcePosition = null;
+                                  _destinationPosition = null;
+                                  _routePoints = [];
+                                  _routeInfo = null;
+                                });
+                              },
+                            ),
                         ],
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
 
-          // Safety alerts overlay
-          if (_showSafetyPanel)
-            // Safety alerts temporarily removed due to service changes
-            Container(),
+            // Calculating route overlay
+            if (_isCalculatingRoute)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black26,
+                  child: const Center(
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text(
+                              'Calculating route...',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
-          // Network panel overlay
-          if (_showNetworkPanel)
+            // Safety alerts overlay
+            if (_showSafetyPanel)
+              // Safety alerts temporarily removed due to service changes
+              Container(),
+
+            // Network panel overlay
+            if (_showNetworkPanel)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 300,
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  child: const MeshNetworkWidget(),
+                ),
+              ),
+
+            // Bottom status bar with SafeArea protection
             Positioned(
-              top: 0,
+              bottom: 0,
+              left: 0,
               right: 0,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 300,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
-                ),
-                child: const MeshNetworkWidget(),
-              ),
+              child: SafeArea(bottom: true, child: _buildStatusBar()),
             ),
 
-          // Bottom status bar with SafeArea protection
-          Positioned(
-            bottom: 0, 
-            left: 0, 
-            right: 0, 
-            child: SafeArea(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.15, // Max 15% of screen height
-                  minHeight: 70,
-                ),
-                child: _buildStatusBar(),
-              ),
-            ),
-          ),
-
-          // Collision Alert Widget (overlay alerts)
-          const CollisionAlertWidget(),
-        ],
+            // Collision Alert Widget (overlay alerts)
+            const CollisionAlertWidget(),
+          ],
         ),
       ),
       floatingActionButton: _buildFloatingControls(),
