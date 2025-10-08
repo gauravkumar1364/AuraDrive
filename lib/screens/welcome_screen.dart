@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import 'login_screen.dart';
 
 /// Welcome screen for AuraDrive with onboarding
@@ -122,7 +121,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       // Page indicators
                       _buildPageIndicators(),
                       const SizedBox(height: 24),
-                      
+
                       // Get Started button
                       SizedBox(
                         width: double.infinity,
@@ -142,7 +141,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               borderRadius: BorderRadius.circular(16),
                             ),
                             elevation: 8,
-                            shadowColor: const Color(0xFF7B2CBF).withOpacity(0.5),
+                            shadowColor: const Color(
+                              0xFF7B2CBF,
+                            ).withOpacity(0.5),
                           ),
                           child: const Text(
                             'Get Started',
@@ -195,7 +196,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               color: const Color(0xFF2D1B4E).withOpacity(0.6),
             ),
           ),
-          
+
           // Inner circle with icon
           Container(
             width: 100,
@@ -210,7 +211,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               color: Colors.white,
             ),
           ),
-          
+
           // Status indicator (green dot)
           Positioned(
             top: 20,
@@ -221,10 +222,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFF00C9A7), // Teal/green
-                border: Border.all(
-                  color: const Color(0xFF1A0B2E),
-                  width: 3,
-                ),
+                border: Border.all(color: const Color(0xFF1A0B2E), width: 3),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFF00C9A7).withOpacity(0.6),
@@ -233,11 +231,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.check,
-                size: 14,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.check, size: 14, color: Colors.white),
             ),
           ),
         ],
@@ -281,16 +275,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: color.withOpacity(0.2),
-            border: Border.all(
-              color: color.withOpacity(0.4),
-              width: 2,
-            ),
+            border: Border.all(color: color.withOpacity(0.4), width: 2),
           ),
-          child: Icon(
-            icon,
-            size: 32,
-            color: color,
-          ),
+          child: Icon(icon, size: 32, color: color),
         ),
         const SizedBox(height: 12),
         Text(

@@ -1,80 +1,290 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';import 'package:flutter/material.dart';import 'package:flutter/material.dart';
+
 import 'package:provider/provider.dart';
-import '../services/collision_detection_service.dart';
-import '../models/models.dart';
 
-/// Widget for displaying safety alerts and collision warnings
+import '../services/accelerometer_collision_service.dart';import 'package:provider/provider.dart';import 'package:provider/provider.dart';
+
+
+
+/// Simple widget for displaying collision detection statusimport '../services/accelerometer_collision_service.dart';import '../services/accelerometer_collision_service.dart';
+
 class SafetyAlertsWidget extends StatelessWidget {
-  const SafetyAlertsWidget({super.key});
 
-  @override
+  const SafetyAlertsWidget({super.key});import '../models/models.dart';
+
+
+
+  @override/// Widget for displaying collision detection status
+
   Widget build(BuildContext context) {
-    return Consumer<CollisionDetectionService>(
+
+    return Consumer<AccelerometerCollisionService>(class SafetyAlertsWidget extends StatelessWidget {/// Widget for displaying safety alerts and collision warnings
+
       builder: (context, collisionService, child) {
-        final alerts = collisionService.activeAlerts
-            .where((alert) => alert.isValid)
-            .toList()
-          ..sort((a, b) => b.priority.compareTo(a.priority));
 
-        if (alerts.isEmpty) {
-          return Container(); // No alerts to show
-        }
+        if (!collisionService.isMonitoring) {  const SafetyAlertsWidget({super.key});class SafetyAlertsWidget extends StatelessWidget {
 
-        return Container(
-          margin: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _getAlertColor(alerts.first.riskLevel),
-              width: 2,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _getAlertColor(alerts.first.riskLevel),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(10),
+          return Card(
+
+            color: Colors.red.withOpacity(0.8),  const SafetyAlertsWidget({super.key});
+
+            child: Padding(
+
+              padding: const EdgeInsets.all(8.0),  @override
+
+              child: Row(
+
+                mainAxisSize: MainAxisSize.min,  Widget build(BuildContext context) {  @override
+
+                children: [
+
+                  const Icon(Icons.warning, color: Colors.white, size: 20),    return Consumer<AccelerometerCollisionService>(  Widget build(BuildContext context) {
+
+                  const SizedBox(width: 8),
+
+                  const Text(      builder: (context, collisionService, child) {    return Consumer<AccelerometerCollisionService>(
+
+                    'Collision Detection OFF',
+
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),        if (!collisionService.isMonitoring) {      builder: (context, collisionService, child) {
+
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _getAlertIcon(alerts.first.riskLevel),
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'SAFETY ALERTS (${alerts.length})',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'Score: ${collisionService.safetyScore}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+
+                ],          return Container(        // Since AccelerometerCollisionService doesn't have activeAlerts,
+
               ),
-              
-              // Alert list
-              Container(
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: ListView.builder(
-                  shrinkWrap: true,
+
+            ),            margin: const EdgeInsets.all(8.0),        // we'll show monitoring status instead
+
+          );
+
+        }            child: Card(        if (!collisionService.isMonitoring) {
+
+
+
+        return Card(              color: Colors.red.withOpacity(0.9),          return Container(); // No monitoring, no alerts to show
+
+          color: Colors.green.withOpacity(0.8),
+
+          child: Padding(              child: Padding(        }
+
+            padding: const EdgeInsets.all(8.0),
+
+            child: Row(                padding: const EdgeInsets.all(12.0),
+
+              mainAxisSize: MainAxisSize.min,
+
+              children: [                child: Row(        return Container(
+
+                const Icon(Icons.shield, color: Colors.white, size: 20),
+
+                const SizedBox(width: 8),                  children: [          margin: const EdgeInsets.all(8.0),
+
+                const Text(
+
+                  'Collision Detection ON',                    const Icon(          child: Card(
+
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+
+                ),                      Icons.warning,            color: Colors.green.withOpacity(0.9),
+
+              ],
+
+            ),                      color: Colors.white,            child: Padding(
+
+          ),
+
+        );                      size: 24,              padding: const EdgeInsets.all(12.0),
+
+      },
+
+    );                    ),              child: Row(
+
+  }
+
+}                    const SizedBox(width: 8),                children: [
+
+                    Expanded(                  const Icon(
+
+                      child: Column(                    Icons.shield_outlined,
+
+                        crossAxisAlignment: CrossAxisAlignment.start,                    color: Colors.white,
+
+                        mainAxisSize: MainAxisSize.min,                    size: 24,
+
+                        children: [                  ),
+
+                          const Text(                  const SizedBox(width: 8),
+
+                            'Collision Detection Inactive',                  Expanded(
+
+                            style: TextStyle(                    child: Column(
+
+                              color: Colors.white,                      crossAxisAlignment: CrossAxisAlignment.start,
+
+                              fontWeight: FontWeight.bold,                      mainAxisSize: MainAxisSize.min,
+
+                              fontSize: 14,                      children: [
+
+                            ),                        const Text(
+
+                          ),                          'Collision Detection Active',
+
+                          Text(                          style: TextStyle(
+
+                            'Safety monitoring is currently disabled',                            color: Colors.white,
+
+                            style: TextStyle(                            fontWeight: FontWeight.bold,
+
+                              color: Colors.white.withOpacity(0.9),                            fontSize: 14,
+
+                              fontSize: 12,                          ),
+
+                            ),                        ),
+
+                          ),                        Text(
+
+                        ],                          'Monitoring for crashes, hard braking & sharp turns',
+
+                      ),                          style: TextStyle(
+
+                    ),                            color: Colors.white.withOpacity(0.9),
+
+                  ],                            fontSize: 12,
+
+                ),                          ),
+
+              ),                        ),
+
+            ),                      ],
+
+          );                    ),
+
+        }                  ),
+
+                ],
+
+        return Container(              ),
+
+          margin: const EdgeInsets.all(8.0),            ),
+
+          child: Card(          ),
+
+            color: Colors.green.withOpacity(0.9),        );
+
+            child: Padding(        }
+
+              padding: const EdgeInsets.all(12.0),
+
+              child: Row(        return Container(
+
+                children: [          margin: const EdgeInsets.all(8),
+
+                  const Icon(          decoration: BoxDecoration(
+
+                    Icons.shield_outlined,            color: Colors.black.withOpacity(0.9),
+
+                    color: Colors.white,            borderRadius: BorderRadius.circular(12),
+
+                    size: 24,            border: Border.all(
+
+                  ),              color: _getAlertColor(alerts.first.riskLevel),
+
+                  const SizedBox(width: 8),              width: 2,
+
+                  Expanded(            ),
+
+                    child: Column(          ),
+
+                      crossAxisAlignment: CrossAxisAlignment.start,          child: Column(
+
+                      mainAxisSize: MainAxisSize.min,            mainAxisSize: MainAxisSize.min,
+
+                      children: [            children: [
+
+                        const Text(              // Header
+
+                          'Collision Detection Active',              Container(
+
+                          style: TextStyle(                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+
+                            color: Colors.white,                decoration: BoxDecoration(
+
+                            fontWeight: FontWeight.bold,                  color: _getAlertColor(alerts.first.riskLevel),
+
+                            fontSize: 14,                  borderRadius: const BorderRadius.vertical(
+
+                          ),                    top: Radius.circular(10),
+
+                        ),                  ),
+
+                        Text(                ),
+
+                          'Monitoring: Crashes (12G+), Hard Braking (1.0G+), Sharp Turns (0.8G+)',                child: Row(
+
+                          style: TextStyle(                  children: [
+
+                            color: Colors.white.withOpacity(0.9),                    Icon(
+
+                            fontSize: 12,                      _getAlertIcon(alerts.first.riskLevel),
+
+                          ),                      color: Colors.white,
+
+                        ),                      size: 20,
+
+                      ],                    ),
+
+                    ),                    const SizedBox(width: 8),
+
+                  ),                    Text(
+
+                  Container(                      'SAFETY ALERTS (${alerts.length})',
+
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),                      style: const TextStyle(
+
+                    decoration: BoxDecoration(                        color: Colors.white,
+
+                      color: Colors.white.withOpacity(0.2),                        fontWeight: FontWeight.bold,
+
+                      borderRadius: BorderRadius.circular(12),                        fontSize: 14,
+
+                    ),                      ),
+
+                    child: const Text(                    ),
+
+                      'ACTIVE',                    const Spacer(),
+
+                      style: TextStyle(                    Text(
+
+                        color: Colors.white,                      'Score: ${collisionService.safetyScore}',
+
+                        fontSize: 10,                      style: const TextStyle(
+
+                        fontWeight: FontWeight.bold,                        color: Colors.white,
+
+                      ),                        fontSize: 12,
+
+                    ),                      ),
+
+                  ),                    ),
+
+                ],                  ],
+
+              ),                ),
+
+            ),              ),
+
+          ),              
+
+        );              // Alert list
+
+      },              Container(
+
+    );                constraints: const BoxConstraints(maxHeight: 200),
+
+  }                child: ListView.builder(
+
+}                  shrinkWrap: true,
                   itemCount: alerts.length,
                   itemBuilder: (context, index) {
                     final alert = alerts[index];

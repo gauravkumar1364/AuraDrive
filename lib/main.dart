@@ -5,18 +5,18 @@ import 'screens/splash_screen.dart';
 import 'screens/permissions_screen.dart';
 import 'services/gnss_service.dart';
 import 'services/mesh_network_service.dart';
-import 'services/collision_detection_service.dart';
+import 'services/accelerometer_collision_service.dart';
 
 void main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Pre-initialize heavy services
+  // Pre-initialize services with safer collision detection
   final gnssService = GnssService();
   final meshNetworkService = MeshNetworkService();
-  final collisionService = CollisionDetectionService();
+  final collisionService = AccelerometerCollisionService();
 
-  // Run the app with pre-initialized services
+  // Run the app with safer services
   runApp(
     MultiProvider(
       providers: [

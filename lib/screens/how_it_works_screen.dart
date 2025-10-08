@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import 'permissions_screen.dart';
 
 /// How It Works screen explaining AuraDrive functionality
@@ -20,7 +19,7 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
   @override
   void initState() {
     super.initState();
-    
+
     // Pulse animation for the network dots
     _pulseController = AnimationController(
       vsync: this,
@@ -28,10 +27,7 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
     )..repeat(reverse: true);
 
     _pulseAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _pulseController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
     // Line animation for dotted lines
@@ -40,9 +36,10 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
       duration: const Duration(milliseconds: 2000),
     )..repeat();
 
-    _lineAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      _lineController,
-    );
+    _lineAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(_lineController);
   }
 
   @override
@@ -67,7 +64,7 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
                     child: Column(
                       children: [
                         const SizedBox(height: 40),
-                        
+
                         // Title
                         const Text(
                           'How It Works',
@@ -78,9 +75,9 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         // Description
                         Text(
                           'AuraDrive uses your phone\'s sensors and\nBluetooth to create a local network, detecting\nother users around you without relying on servers.',
@@ -91,14 +88,14 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        
+
                         const SizedBox(height: 50),
-                        
+
                         // Network visualization
                         _buildNetworkVisualization(),
-                        
+
                         const SizedBox(height: 50),
-                        
+
                         // Feature cards
                         _buildFeatureCard(
                           icon: Icons.wifi_tethering,
@@ -106,32 +103,32 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
                           description: 'Direct device-to-device communication',
                           color: const Color(0xFF7B2CBF),
                         ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         _buildFeatureCard(
                           icon: Icons.track_changes,
                           title: 'Real-time Detection',
                           description: 'Instant alerts as vehicles approach',
                           color: const Color(0xFF00C9A7),
                         ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         _buildFeatureCard(
                           icon: Icons.wifi_off,
                           title: 'No Internet Required',
                           description: 'Works completely offline',
                           color: const Color(0xFF3A86FF),
                         ),
-                        
+
                         const SizedBox(height: 30),
                       ],
                     ),
                   ),
                 ),
               ),
-              
+
               // Bottom navigation
               Padding(
                 padding: const EdgeInsets.all(24.0),
@@ -140,19 +137,19 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
                     // Page indicators
                     _buildPageIndicators(),
                     const SizedBox(height: 24),
-                    
+
                     // Next button
                     SizedBox(
                       width: double.infinity,
                       height: 56,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => const PermissionsScreen(),
-                              ),
-                            );
-                          },
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const PermissionsScreen(),
+                            ),
+                          );
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF3A86FF), // Blue
                           foregroundColor: Colors.white,
@@ -172,9 +169,9 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
                         ),
                       ),
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // Back button
                     TextButton(
                       onPressed: () {
@@ -208,11 +205,9 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
           // Animated dotted lines
           CustomPaint(
             size: const Size(280, 280),
-            painter: DottedLinesPainter(
-              animation: _lineAnimation,
-            ),
+            painter: DottedLinesPainter(animation: _lineAnimation),
           ),
-          
+
           // Center device (You)
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -234,7 +229,7 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
               ),
             ],
           ),
-          
+
           // Top-left driver
           Positioned(
             top: 30,
@@ -262,7 +257,7 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
               ),
             ),
           ),
-          
+
           // Top-right driver
           Positioned(
             top: 30,
@@ -290,7 +285,7 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
               ),
             ),
           ),
-          
+
           // Bottom driver
           Positioned(
             bottom: 20,
@@ -361,10 +356,7 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
       decoration: BoxDecoration(
         color: const Color(0xFF2D1B4E).withOpacity(0.5),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.3), width: 1),
       ),
       child: Row(
         children: [
@@ -375,11 +367,7 @@ class _HowItWorksScreenState extends State<HowItWorksScreen>
               color: color.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 28,
-            ),
+            child: Icon(icon, color: color, size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -455,17 +443,27 @@ class DottedLinesPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final center = Offset(size.width / 2, size.height / 2);
-    
+
     // Draw dotted lines to each driver position
     _drawDottedLine(canvas, paint, center, Offset(80, 80)); // Top-left
-    _drawDottedLine(canvas, paint, center, Offset(size.width - 80, 80)); // Top-right
-    _drawDottedLine(canvas, paint, center, Offset(size.width / 2, size.height - 80)); // Bottom
+    _drawDottedLine(
+      canvas,
+      paint,
+      center,
+      Offset(size.width - 80, 80),
+    ); // Top-right
+    _drawDottedLine(
+      canvas,
+      paint,
+      center,
+      Offset(size.width / 2, size.height - 80),
+    ); // Bottom
   }
 
   void _drawDottedLine(Canvas canvas, Paint paint, Offset start, Offset end) {
     const dashWidth = 5.0;
     const dashSpace = 5.0;
-    
+
     final path = Path()
       ..moveTo(start.dx, start.dy)
       ..lineTo(end.dx, end.dy);
@@ -474,10 +472,7 @@ class DottedLinesPainter extends CustomPainter {
     for (final metric in pathMetrics) {
       double distance = 0.0;
       while (distance < metric.length) {
-        final extractPath = metric.extractPath(
-          distance,
-          distance + dashWidth,
-        );
+        final extractPath = metric.extractPath(distance, distance + dashWidth);
         canvas.drawPath(extractPath, paint);
         distance += dashWidth + dashSpace;
       }

@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'dart:math' as math;
 import 'dart:async';
 import '../services/gnss_service.dart';
 import '../services/mesh_network_service.dart';
-import '../services/collision_detection_service.dart';
+import '../services/accelerometer_collision_service.dart';
 import '../services/routing_service.dart';
 import '../models/models.dart';
-import '../widgets/safety_alerts_widget.dart';
 import '../widgets/mesh_network_widget.dart';
 import '../widgets/route_search_dialog.dart';
+import '../widgets/collision_alert_widget.dart';
 import '../config/app_config.dart';
 
 import 'settings_screen.dart';
@@ -116,20 +115,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
     });
   }
 
-  /// Handle collision alerts
-  void _onCollisionAlert(CollisionAlert alert) {
-    // Show alert UI
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Collision alert: ${alert.alertType}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
-
   @override
   void dispose() {
     _dataTimer?.cancel();
@@ -146,7 +131,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         context,
         listen: false,
       );
-      final collisionService = Provider.of<CollisionDetectionService>(
+      final collisionService = Provider.of<AccelerometerCollisionService>(
         context,
         listen: false,
       );
@@ -175,10 +160,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
       }
 
       try {
-        if (!await collisionService.initialize()) {
-          _showServiceError('Failed to initialize collision detection');
-          initSuccess = false;
-        }
+        // AccelerometerCollisionService doesn't need initialize() - it's ready to use
+        debugPrint('✅ Accelerometer collision detection ready');
       } catch (e) {
         _showServiceError('Failed to initialize collision detection: $e');
         initSuccess = false;
@@ -191,16 +174,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
       // Start services with error handling
       try {
-        await Future.wait([
-          gnssService.startPositioning(),
-          meshService.startScanning(),
-          collisionService.startMonitoring(),
-        ]);
+        await Future.wait(
+          [
+            gnssService.startPositioning(),
+            meshService.startScanning(),
+            collisionService.startMonitoring(),
+          ].cast<Future>(),
+        );
 
         // Set up listeners
         gnssService.positionStream.listen(_onPositionUpdate);
         meshService.positionReceivedStream.listen(_onPeerPositionUpdate);
-        collisionService.alertStream.listen(_onCollisionAlert);
+        // AccelerometerCollisionService doesn't have alertStream - it uses debug prints instead
       } catch (e) {
         if (mounted) {
           _showServiceError('Failed to start services: $e');
@@ -267,68 +252,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
       );
     }
 
-    // Collision alert markers
-    final collisionService = Provider.of<CollisionDetectionService>(
-      context,
-      listen: false,
-    );
-    for (final alert in collisionService.activeAlerts) {
-      // Skip alerts without position data or if current position is unknown
-      if (_currentPosition == null) continue;
-
-      // Calculate approximate position based on relative position
-      // This is a simplified calculation - in real implementation you'd need more sophisticated positioning
-      final distance = alert.relativePosition.distance;
-      final bearing =
-          alert.relativePosition.bearing *
-          (math.pi / 180); // Convert to radians
-
-      final lat =
-          _currentPosition!.latitude +
-          (distance * math.cos(bearing)) / 111320; // Rough conversion
-      final lng =
-          _currentPosition!.longitude +
-          (distance * math.sin(bearing)) /
-              (111320 * math.cos(_currentPosition!.latitude * math.pi / 180));
-
-      Color alertColor = Colors.yellow;
-      IconData alertIcon = Icons.warning;
-
-      switch (alert.alertType) {
-        case AlertType.collision:
-          alertColor = Colors.orange;
-          alertIcon = Icons.warning_amber;
-          break;
-        case AlertType.crash:
-          alertColor = Colors.red;
-          alertIcon = Icons.error;
-          break;
-        case AlertType.emergency:
-          alertColor = Colors.red.shade900;
-          alertIcon = Icons.emergency;
-          break;
-        default:
-          alertColor = Colors.yellow;
-          alertIcon = Icons.warning;
-          break;
-      }
-
-      markers.add(
-        Marker(
-          point: LatLng(lat, lng),
-          width: 32,
-          height: 32,
-          child: Container(
-            decoration: BoxDecoration(
-              color: alertColor,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: Icon(alertIcon, color: Colors.white, size: 20),
-          ),
-        ),
-      );
-    }
+    // Collision alerts are now handled via debug prints - no active alerts list available
+    // You can add visual feedback here if needed by listening to the service's notifier
 
     // Source marker (green pin)
     if (_sourcePosition != null) {
@@ -489,22 +414,31 @@ class _NavigationScreenState extends State<NavigationScreen> {
             child: _buildStatusItem(
               'Safety',
               Icons.shield,
-              Consumer<CollisionDetectionService>(
+              Consumer<AccelerometerCollisionService>(
                 builder: (context, service, child) {
-                  final alertCount = service.activeAlerts.length;
+                  final recentAlertsCount = service.recentAlerts.length;
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '$alertCount alerts',
+                        service.isMonitoring ? 'Active' : 'Stopped',
                         style: TextStyle(
                           fontSize: 12,
-                          color: alertCount > 0 ? Colors.red : Colors.white,
+                          color: service.isMonitoring
+                              ? Colors.green
+                              : Colors.red,
                         ),
                       ),
                       Text(
-                        service.isMonitoring ? 'Monitoring' : 'Stopped',
-                        style: TextStyle(fontSize: 10, color: Colors.grey[300]),
+                        recentAlertsCount > 0
+                            ? '$recentAlertsCount alerts'
+                            : 'No alerts',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: recentAlertsCount > 0
+                              ? Colors.orange[300]
+                              : Colors.grey[300],
+                        ),
                       ),
                     ],
                   );
@@ -620,6 +554,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
               : Colors.grey[600],
           child: const Icon(Icons.security, color: Colors.white),
         ),
+        const SizedBox(height: 8),
+        FloatingActionButton(
+          mini: true,
+          heroTag: 'test_alert',
+          onPressed: () {
+            // Test collision alert
+            final service = Provider.of<AccelerometerCollisionService>(
+              context,
+              listen: false,
+            );
+            service.testAlert(
+              type: 'crash',
+              message: 'TEST COLLISION! 15.2G impact',
+              gForce: 15.2,
+              severity: 'high',
+            );
+          },
+          backgroundColor: Colors.red[700],
+          child: const Icon(Icons.warning, color: Colors.white),
+        ),
       ],
     );
   }
@@ -647,15 +601,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
               );
             },
           ),
-          // Safety score indicator
-          Consumer<CollisionDetectionService>(
+          // Safety status indicator
+          Consumer<AccelerometerCollisionService>(
             builder: (context, collisionService, child) {
-              final safetyScore = collisionService.safetyScore;
-              final color = safetyScore >= 80
-                  ? Colors.green
-                  : safetyScore >= 60
-                  ? Colors.orange
-                  : Colors.red;
+              // No safety score available - show status instead
+              final isMonitoring = collisionService.isMonitoring;
+              final color = isMonitoring ? Colors.green : Colors.red;
 
               return Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -668,7 +619,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  'Safety: $safetyScore',
+                  isMonitoring
+                      ? 'Collision Detection ON'
+                      : 'Collision Detection OFF',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -837,12 +790,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
           // Safety alerts overlay
           if (_showSafetyPanel)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SafetyAlertsWidget(),
-            ),
+            // Safety alerts temporarily removed due to service changes
+            Container(),
 
           // Network panel overlay
           if (_showNetworkPanel)
@@ -860,6 +809,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
           // Bottom status bar
           Positioned(bottom: 0, left: 0, right: 0, child: _buildStatusBar()),
+
+          // Collision Alert Widget (overlay alerts)
+          const CollisionAlertWidget(),
         ],
       ),
       floatingActionButton: _buildFloatingControls(),
