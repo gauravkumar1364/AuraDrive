@@ -16,7 +16,7 @@ import '../config/app_config.dart';
 
 import 'settings_screen.dart';
 
-/// Main navigation screen with real-time OpenStreetMap and safety features
+/// Main navigation screen with regit commit -m "fixed pixel overflow and ui"al-time OpenStreetMap and safety features
 class NavigationScreen extends StatefulWidget {
   const NavigationScreen({super.key});
 
@@ -31,6 +31,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   bool _isFollowingLocation = true;
   bool _showSafetyPanel = true;
   bool _showNetworkPanel = false;
+  double _currentHeading = 0.0; // Track heading for smooth rotation
 
   // Route points
   LatLng? _sourcePosition;
@@ -186,6 +187,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
         // Set up listeners
         gnssService.positionStream.listen(_onPositionUpdate);
         meshService.positionReceivedStream.listen(_onPeerPositionUpdate);
+
+        // Start automatic position broadcasting to connected devices
+        meshService.startPositionBroadcasting(gnssService.positionStream);
+        debugPrint('✅ Automatic position broadcasting started');
+
         // AccelerometerCollisionService doesn't have alertStream - it uses debug prints instead
       } catch (e) {
         if (mounted) {
@@ -205,49 +211,119 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final meshService = Provider.of<MeshNetworkService>(context, listen: false);
     final gnssService = Provider.of<GnssService>(context, listen: false);
 
-    // Current position marker
+    // Current position marker with dynamic heading
     if (_currentPosition != null) {
+      final heading = gnssService.currentPosition?.heading ?? 0.0;
+
       markers.add(
         Marker(
           point: _currentPosition!,
           width: AppConfig.vehicleIconSize,
           height: AppConfig.vehicleIconSize,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.blue,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: const Icon(Icons.navigation, color: Colors.white, size: 20),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: _currentHeading, end: heading),
+            duration: const Duration(
+              milliseconds: 300,
+            ), // Smooth 300ms animation
+            curve: Curves.easeInOut,
+            onEnd: () {
+              if (mounted) {
+                setState(() {
+                  _currentHeading = heading;
+                });
+              }
+            },
+            builder: (context, angle, child) {
+              return Transform.rotate(
+                angle: angle * (3.14159 / 180), // Convert degrees to radians
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.3),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.navigation,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       );
     }
 
-    // Peer vehicle markers
-    for (final peerPosition in meshService.sharedPositions.values) {
+    // Peer vehicle markers - Show connected AuraDrive apps in real-time
+    for (final entry in meshService.sharedPositions.entries) {
+      final peerPosition = entry.value;
+
       final distance = _currentPosition != null
           ? gnssService.currentPosition?.distanceTo(peerPosition)
           : null;
 
+      // Show peer heading if available
+      final peerHeading = peerPosition.heading ?? 0.0;
+
       markers.add(
         Marker(
           point: LatLng(peerPosition.latitude, peerPosition.longitude),
-          width: AppConfig.vehicleIconSize,
-          height: AppConfig.vehicleIconSize,
-          child: Container(
-            decoration: BoxDecoration(
-              color: distance != null && distance < 25.0
-                  ? Colors.red
-                  : Colors.green,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: const Icon(
-              Icons.directions_car,
-              color: Colors.white,
-              size: 16,
-            ),
+          width: AppConfig.vehicleIconSize + 4,
+          height: AppConfig.vehicleIconSize + 4,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Outer glow for visibility
+              Container(
+                width: AppConfig.vehicleIconSize + 4,
+                height: AppConfig.vehicleIconSize + 4,
+                decoration: BoxDecoration(
+                  color: distance != null && distance < 25.0
+                      ? Colors.red.withOpacity(0.3)
+                      : Colors.green.withOpacity(0.3),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              // Main marker with heading
+              Transform.rotate(
+                angle: peerHeading * (3.14159 / 180), // Convert to radians
+                child: Container(
+                  width: AppConfig.vehicleIconSize,
+                  height: AppConfig.vehicleIconSize,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: distance != null && distance < 25.0
+                          ? [Colors.red[400]!, Colors.red[700]!]
+                          : [Colors.green[400]!, Colors.green[700]!],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.navigation,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -536,6 +612,163 @@ class _NavigationScreenState extends State<NavigationScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Build speed display widget - Google Maps style
+  Widget _buildSpeedDisplay() {
+    return Consumer<GnssService>(
+      builder: (context, gnssService, child) {
+        // Get current position data
+        final positionData = gnssService.currentPosition;
+
+        // GPS speed is in meters per second, convert to km/h
+        // Google Maps uses actual GPS speed, not calculated from position changes
+        final speedMs = positionData?.speed ?? 0.0;
+
+        // Filter invalid speeds (negative values mean GPS doesn't have speed data)
+        // Also filter very small values as they're likely GPS noise when stationary
+        final validSpeed =
+            speedMs >= 0 &&
+            speedMs < 200; // Max 200 m/s = 720 km/h (sanity check)
+        final cleanSpeed = validSpeed ? speedMs : 0.0;
+
+        // Convert m/s to km/h (1 m/s = 3.6 km/h)
+        final speedKmh = cleanSpeed * 3.6;
+
+        // Round to nearest integer for display (Google Maps style)
+        final displaySpeed = speedKmh.round();
+
+        // Consider "moving" if speed > 1 km/h (to avoid GPS drift showing movement)
+        final isMoving = speedKmh >= 1.0;
+
+        // Debug output
+        if (positionData != null) {
+          debugPrint(
+            '🚗 Speed: ${speedMs.toStringAsFixed(2)} m/s = ${speedKmh.toStringAsFixed(1)} km/h → Display: $displaySpeed km/h',
+          );
+        } else {
+          debugPrint('⚠️ No GPS position data available');
+        }
+
+        return Container(
+          constraints: const BoxConstraints(minWidth: 130, minHeight: 110),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.black.withOpacity(0.85),
+                Colors.grey[900]!.withOpacity(0.90),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: speedKmh > 80
+                  ? Colors.red[400]!
+                  : isMoving
+                  ? Colors.green[400]!
+                  : Colors.grey[600]!,
+              width: 3,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.6),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    displaySpeed.toString(),
+                    style: TextStyle(
+                      fontSize: 52,
+                      fontWeight: FontWeight.bold,
+                      color: speedKmh > 80
+                          ? Colors.red[300]
+                          : isMoving
+                          ? Colors.green[300]
+                          : Colors.white,
+                      height: 1.0,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black.withOpacity(0.5),
+                          offset: const Offset(0, 2),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      'km/h',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[300],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: isMoving
+                      ? Colors.green[600]!.withOpacity(0.3)
+                      : Colors.grey[700]!.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isMoving ? Icons.speed : Icons.gps_fixed,
+                      size: 16,
+                      color: isMoving ? Colors.green[300] : Colors.grey[400],
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      positionData != null
+                          ? (positionData.accuracy < 10
+                                ? 'GPS High'
+                                : positionData.accuracy < 20
+                                ? 'GPS Good'
+                                : 'GPS Low')
+                          : 'No GPS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: positionData != null
+                            ? (positionData.accuracy < 10
+                                  ? Colors.green[200]
+                                  : positionData.accuracy < 20
+                                  ? Colors.yellow[200]
+                                  : Colors.orange[200])
+                            : Colors.grey[400],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1039,6 +1272,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
                   child: const MeshNetworkWidget(),
                 ),
               ),
+
+            // Speed display overlay
+            Positioned(
+              left: 16,
+              bottom: 80,
+              child: SafeArea(child: _buildSpeedDisplay()),
+            ),
 
             // Bottom status bar with SafeArea protection
             Positioned(

@@ -6,7 +6,6 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_ble_peripheral/flutter_ble_peripheral.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
@@ -53,28 +52,97 @@ class MeshNetworkService extends ChangeNotifier {
   }
 
   /// Attempt to start advertising
+  String? _advertisingDeviceId;
+  Timer? _advertisingUpdateTimer;
+
   Future<void> _attemptAdvertising() async {
     try {
-      if (!await _blePeripheral.isAdvertising) {
-        final packageInfo = await PackageInfo.fromPlatform();
-        final deviceId = const Uuid().v4().substring(0, 8);
-        await _blePeripheral.start(
-          advertiseData: AdvertiseData(
-            serviceUuid: naviSafeServiceUuid,
-            localName: 'NaviSafe-${deviceId}',
-            manufacturerId: 0x0000,
-            manufacturerData: Uint8List.fromList(
-              utf8.encode(packageInfo.version),
-            ),
-          ),
+      debugPrint(
+        '🔔 MeshNetworkService: Attempting to start BLE advertising...',
+      );
+      final isCurrentlyAdvertising = await _blePeripheral.isAdvertising;
+      debugPrint(
+        '🔔 MeshNetworkService: Currently advertising: $isCurrentlyAdvertising',
+      );
+
+      if (!isCurrentlyAdvertising) {
+        _advertisingDeviceId = const Uuid().v4().substring(0, 6);
+        debugPrint(
+          '🔔 MeshNetworkService: Generated device ID: Nav-$_advertisingDeviceId',
         );
+        debugPrint('🔔 MeshNetworkService: Service UUID: $naviSafeServiceUuid');
+
+        // Start with initial position
+        await _updateAdvertisingWithPosition();
+
         _isAdvertising = true;
         debugPrint(
-          'MeshNetworkService: Started advertising as NaviSafe-${deviceId}',
+          '✅ MeshNetworkService: Started advertising as Nav-$_advertisingDeviceId',
         );
+
+        // Update advertising position every 2 seconds
+        _advertisingUpdateTimer?.cancel();
+        _advertisingUpdateTimer = Timer.periodic(const Duration(seconds: 2), (
+          timer,
+        ) {
+          _updateAdvertisingWithPosition();
+        });
+      } else {
+        debugPrint('✅ MeshNetworkService: Already advertising');
       }
+    } catch (e, stackTrace) {
+      debugPrint('❌ MeshNetworkService: Advertising error: $e');
+      debugPrint('Stack trace: $stackTrace');
+    }
+  }
+
+  Future<void> _updateAdvertisingWithPosition() async {
+    try {
+      // Get current position
+      final position = _currentPosition;
+
+      // Encode position in manufacturer data (12 bytes total)
+      ByteData buffer = ByteData(12);
+
+      if (position != null) {
+        // Latitude as float32 (4 bytes) - precision ~1cm
+        buffer.setFloat32(0, position.latitude, Endian.little);
+        // Longitude as float32 (4 bytes)
+        buffer.setFloat32(4, position.longitude, Endian.little);
+        // Speed as uint16 (2 bytes) - 0-655.35 km/h with 0.01 precision
+        final speed = position.speed ?? 0.0;
+        buffer.setUint16(
+          8,
+          (speed * 100).round().clamp(0, 65535),
+          Endian.little,
+        );
+        // Heading as uint16 (2 bytes) - 0-359.99 degrees with 0.01 precision
+        final heading = position.heading ?? 0.0;
+        buffer.setUint16(
+          10,
+          (heading * 100).round().clamp(0, 35999),
+          Endian.little,
+        );
+
+        debugPrint(
+          '📡 Advertising position: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}',
+        );
+      } else {
+        // No position - send zeros
+        debugPrint('📡 Advertising without position (GPS not ready)');
+      }
+
+      await _blePeripheral.stop();
+      await _blePeripheral.start(
+        advertiseData: AdvertiseData(
+          serviceUuid: naviSafeServiceUuid,
+          localName: 'Nav-$_advertisingDeviceId',
+          manufacturerId: 0xFFFF, // Custom manufacturer ID
+          manufacturerData: buffer.buffer.asUint8List(),
+        ),
+      );
     } catch (e) {
-      debugPrint('MeshNetworkService: Advertising error: $e');
+      debugPrint('❌ Failed to update advertising: $e');
     }
   }
 
@@ -95,10 +163,12 @@ class MeshNetworkService extends ChangeNotifier {
       _isInitialized = true;
       notifyListeners();
 
+      debugPrint('🔔 MeshNetworkService: Starting advertising...');
       await _attemptAdvertising();
+      debugPrint('🔔 MeshNetworkService: Starting continuous scanning...');
       _startContinuousScanning();
 
-      debugPrint('MeshNetworkService: Initialized successfully');
+      debugPrint('✅ MeshNetworkService: Initialized successfully');
       return true;
     } catch (e) {
       debugPrint('MeshNetworkService: Initialization error: $e');
@@ -113,8 +183,13 @@ class MeshNetworkService extends ChangeNotifier {
   bool _isAdvertising = false;
   Timer? _scanTimer;
   Timer? _reconnectTimer;
-  static const Duration _scanInterval = Duration(seconds: 30);
-  static const Duration _reconnectInterval = Duration(seconds: 15);
+  PositionData? _currentPosition; // Store current position for advertising
+  static const Duration _scanInterval = Duration(
+    milliseconds: 1500,
+  ); // EXTREME FAST - scan every 1.5 seconds
+  static const Duration _reconnectInterval = Duration(
+    milliseconds: 500,
+  ); // INSANE - retry every 0.5 seconds
 
   // BLE peripheral instance for advertising
   final FlutterBlePeripheral _blePeripheral = FlutterBlePeripheral();
@@ -122,13 +197,17 @@ class MeshNetworkService extends ChangeNotifier {
   // Network devices
   final Map<String, NetworkDevice> _discoveredDevices = {};
   final Map<String, BluetoothDevice> _connectedDevices = {};
+  final Map<String, BluetoothDevice> _scannedDevices =
+      {}; // Cache scanned devices for connection
 
   // Cluster configuration
-
-  int _maxClusterSize = 8;
-  static const int minRssiThreshold = -80;
+  int _maxClusterSize = 20; // Support more devices
+  static const int minRssiThreshold =
+      -90; // MAXIMUM RANGE - 60-70m for ultra-long detection
   final Map<String, int> _connectionAttempts = {};
-  static const int maxConnectionAttempts = 3;
+  static const int maxConnectionAttempts =
+      15; // MASSIVE attempts - never give up
+  PositionData? _lastBroadcastedPosition;
 
   // Cached characteristics for efficient broadcasting
   final Map<String, BluetoothCharacteristic> _positionCharacteristics = {};
@@ -160,8 +239,9 @@ class MeshNetworkService extends ChangeNotifier {
       _vehicleDataReceivedController.stream;
   Stream<String> get networkStatusStream => _networkStatusController.stream;
 
-  // Service UUIDs
-  String naviSafeServiceUuid = '12345678-1234-1234-1234-123456789abc';
+  // Service UUIDs - FIXED for all AuraDrive devices
+  static const String naviSafeServiceUuid =
+      '12345678-1234-1234-1234-123456789abc';
   late final Guid naviSafeServiceGuid;
 
   // Characteristic UUIDs
@@ -203,20 +283,46 @@ class MeshNetworkService extends ChangeNotifier {
   void _attemptReconnections() {
     if (_connectedDevices.length >= _maxClusterSize) return;
 
-    for (var device in _discoveredDevices.values) {
+    // Sort devices by RSSI (strongest signal first) for faster connections
+    final sortedDevices = _discoveredDevices.values.toList()
+      ..sort((a, b) => b.connectionStrength.compareTo(a.connectionStrength));
+
+    int connectionsStarted = 0;
+    for (var device in sortedDevices) {
+      if (_connectedDevices.length >= _maxClusterSize) break;
+      if (connectionsStarted >= 8)
+        break; // MAXIMUM parallel connections - 8 at once for extreme speed
+
       if (!_connectedDevices.containsKey(device.deviceId) &&
           (_connectionAttempts[device.deviceId] ?? 0) < maxConnectionAttempts) {
+        // Prioritize NaviSafe devices
+        final isNaviSafe = device.capabilities.supportsRawGnss;
+
         _connectionAttempts[device.deviceId] =
             (_connectionAttempts[device.deviceId] ?? 0) + 1;
+
+        if (isNaviSafe) {
+          debugPrint(
+            '🚀 AUTO-CONNECTING to NaviSafe device ${device.deviceName} (Attempt ${_connectionAttempts[device.deviceId]})...',
+          );
+        }
+
+        connectionsStarted++;
         connectToDevice(device.deviceId).then((success) {
           if (success) {
             _connectionAttempts.remove(device.deviceId);
+            debugPrint('✅ Connected to ${device.deviceName} successfully');
+          } else {
             debugPrint(
-              'MeshNetworkService: Reconnected to ${device.deviceId} successfully',
+              '❌ Failed to connect to ${device.deviceName} (Attempt ${_connectionAttempts[device.deviceId]}/$maxConnectionAttempts)',
             );
           }
         });
       }
+    }
+
+    if (connectionsStarted > 0) {
+      debugPrint('📡 Started $connectionsStarted auto-connection attempts');
     }
   }
 
@@ -262,6 +368,7 @@ class MeshNetworkService extends ChangeNotifier {
                     uuid.toString().toLowerCase() ==
                     naviSafeServiceUuid.toLowerCase(),
               ) ||
+              result.advertisementData.localName.startsWith('Nav-') ||
               result.advertisementData.localName.startsWith('NaviSafe');
 
           final device = NetworkDevice(
@@ -284,13 +391,64 @@ class MeshNetworkService extends ChangeNotifier {
           );
 
           // Only add devices with acceptable signal strength
-          if (result.rssi > minRssiThreshold) {
+          if (result.rssi >= minRssiThreshold) {
             _discoveredDevices[device.deviceId] = device;
+            _scannedDevices[device.deviceId] =
+                result.device; // Cache the actual BLE device
             _deviceDiscoveredController.add(device);
             notifyListeners();
             debugPrint(
               'MeshNetworkService: Added ${isNaviSafe ? 'NaviSafe' : 'BLE'} device ${device.deviceName} with RSSI ${result.rssi}',
             );
+
+            // Extract position from manufacturer data for NaviSafe devices
+            if (isNaviSafe &&
+                result.advertisementData.manufacturerData.containsKey(0xFFFF)) {
+              final manuData =
+                  result.advertisementData.manufacturerData[0xFFFF]!;
+              if (manuData.length >= 12) {
+                try {
+                  ByteData buffer = ByteData.sublistView(
+                    Uint8List.fromList(manuData),
+                  );
+                  double lat = buffer.getFloat32(0, Endian.little);
+                  double lon = buffer.getFloat32(4, Endian.little);
+                  double speed =
+                      buffer.getUint16(8, Endian.little) /
+                      100.0; // Convert back from 0.01 precision
+                  double heading = buffer.getUint16(10, Endian.little) / 100.0;
+
+                  // Only add if position is valid (not all zeros)
+                  if (lat != 0.0 || lon != 0.0) {
+                    final positionData = PositionData(
+                      deviceId: device.deviceId,
+                      latitude: lat,
+                      longitude: lon,
+                      altitude: 0.0,
+                      accuracy: 5.0, // Assume good accuracy
+                      speed: speed,
+                      heading: heading,
+                      timestamp: DateTime.now(),
+                    );
+
+                    _sharedPositions[device.deviceId] = positionData;
+                    _positionReceivedController.add(positionData);
+                    notifyListeners();
+
+                    debugPrint(
+                      '� Received position from ${device.deviceName}: ${lat.toStringAsFixed(6)}, ${lon.toStringAsFixed(6)} (${speed.toStringAsFixed(1)} km/h)',
+                    );
+                  }
+                } catch (e) {
+                  debugPrint(
+                    '❌ Failed to decode position from ${device.deviceName}: $e',
+                  );
+                }
+              }
+            }
+
+            // REMOVE AUTO-CONNECT LOGIC - No longer needed!
+            // Position sharing now works via advertising data only
           } else {
             debugPrint(
               'MeshNetworkService: Rejected device ${device.deviceName} - RSSI ${result.rssi} below threshold $minRssiThreshold',
@@ -328,31 +486,71 @@ class MeshNetworkService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Connect to a specific device by ID
+  /// Connect to a specific device by ID with enhanced error handling
   Future<bool> connectToDevice(String deviceId) async {
     try {
-      final scanResults = await FlutterBluePlus.scanResults.first;
-      final scanResult = scanResults.firstWhere(
-        (r) => r.device.remoteId.toString() == deviceId,
-        orElse: () => throw Exception('Device not found in scan results'),
-      );
-      final device = scanResult.device;
+      // Try to get device from cache first
+      BluetoothDevice? device = _scannedDevices[deviceId];
 
-      await device.connect(timeout: const Duration(seconds: 20));
+      // If not in cache, try to find in scan results
+      if (device == null) {
+        final scanResults = await FlutterBluePlus.scanResults.first.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => [],
+        );
 
+        if (scanResults.isEmpty) {
+          throw Exception('No scan results available');
+        }
+
+        final scanResult = scanResults.firstWhere(
+          (r) => r.device.remoteId.toString() == deviceId,
+          orElse: () => throw Exception('Device not found in scan results'),
+        );
+        device = scanResult.device;
+        _scannedDevices[deviceId] = device; // Cache for future use
+      }
+
+      debugPrint('🔗 Connecting to ${device.platformName} ($deviceId)...');
+      await device.connect(
+        timeout: const Duration(seconds: 10),
+      ); // VERY FAST timeout - fail and retry quickly
+      debugPrint('✅ Connected to ${device.platformName}');
+
+      debugPrint('🔍 Discovering services...');
       final services = await device.discoverServices();
+      debugPrint('📋 Found ${services.length} services');
+
+      // Log all services for debugging
+      for (final service in services) {
+        debugPrint('   Service: ${service.uuid}');
+      }
+
       final naviSafeService = services.firstWhere(
         (s) =>
             s.uuid.toString().toLowerCase() ==
             naviSafeServiceUuid.toLowerCase(),
-        orElse: () => throw Exception('NaviSafe service not found'),
+        orElse: () => throw Exception(
+          'NaviSafe service not found - available services: ${services.map((s) => s.uuid).join(", ")}',
+        ),
       );
+      debugPrint('✅ NaviSafe service found: ${naviSafeService.uuid}');
 
       _connectedDevices[deviceId] = device;
       _connectionSubscriptions[deviceId] = device.connectionState.listen(
         (state) {
           if (state == BluetoothConnectionState.disconnected) {
+            debugPrint(
+              '⚠️ Device $deviceId disconnected - will auto-reconnect',
+            );
             _handleDeviceDisconnected(deviceId);
+
+            // Reset connection attempts for auto-reconnect
+            if (_connectionAttempts.containsKey(deviceId)) {
+              _connectionAttempts[deviceId] = 0;
+            }
+          } else if (state == BluetoothConnectionState.connected) {
+            debugPrint('✅ Device $deviceId connection state: connected');
           }
         },
         onError: (e) {
@@ -365,38 +563,151 @@ class MeshNetworkService extends ChangeNotifier {
 
       _networkStatusController.add('Connected to ${device.platformName}');
 
-      // Set up characteristic monitoring
+      // Set up characteristic monitoring for position updates
       final positionChar = naviSafeService.characteristics.firstWhere(
         (c) => c.uuid.toString() == positionCharacteristicUuid,
       );
       _positionCharacteristics[deviceId] = positionChar;
+
+      // Subscribe to position updates for real-time location sharing
+      await positionChar.setNotifyValue(true);
+      positionChar.value.listen((value) {
+        if (value.isNotEmpty) {
+          try {
+            final jsonString = utf8.decode(value);
+            final position = PositionData.fromJsonString(jsonString);
+            _sharedPositions[deviceId] = position;
+            _positionReceivedController.add(position);
+            debugPrint(
+              '📍 Received position from $deviceId: ${position.latitude}, ${position.longitude}',
+            );
+            notifyListeners(); // Update UI immediately
+          } catch (e) {
+            debugPrint('⚠️ Error parsing position data: $e');
+          }
+        }
+      });
 
       final vehicleDataChar = naviSafeService.characteristics.firstWhere(
         (c) => c.uuid.toString() == vehicleDataCharacteristicUuid,
       );
       _vehicleDataCharacteristics[deviceId] = vehicleDataChar;
 
+      // Subscribe to vehicle data updates
+      await vehicleDataChar.setNotifyValue(true);
+      vehicleDataChar.value.listen((value) {
+        if (value.isNotEmpty) {
+          try {
+            final jsonString = utf8.decode(value);
+            final vehicleData = VehicleData.fromJsonString(jsonString);
+            _vehicleDataReceivedController.add(vehicleData);
+            debugPrint('🚗 Received vehicle data from $deviceId');
+          } catch (e) {
+            debugPrint('⚠️ Error parsing vehicle data: $e');
+          }
+        }
+      });
+
+      debugPrint('✅ Device $deviceId fully connected and monitoring');
+
+      // Update the discovered device status to connected
+      if (_discoveredDevices.containsKey(deviceId)) {
+        final discoveredDevice = _discoveredDevices[deviceId]!;
+        _discoveredDevices[deviceId] = NetworkDevice(
+          deviceId: discoveredDevice.deviceId,
+          deviceName: discoveredDevice.deviceName,
+          lastSeen: DateTime.now(),
+          connectionStrength: discoveredDevice.connectionStrength,
+          status: NetworkDeviceStatus.connected, // Update status
+          capabilities: discoveredDevice.capabilities,
+        );
+      }
+
+      notifyListeners(); // Update UI with new connection count and status
       return true;
     } catch (e) {
-      debugPrint('MeshNetworkService: Connect error: $e');
+      debugPrint('❌ Connect error for $deviceId: $e');
+
+      // Increment connection attempts counter
+      _connectionAttempts[deviceId] = (_connectionAttempts[deviceId] ?? 0) + 1;
+
+      // Try to disconnect the device if it's stuck in a bad state
+      try {
+        final device = _scannedDevices[deviceId];
+        if (device != null && device.isConnected) {
+          await device.disconnect();
+        }
+      } catch (disconnectError) {
+        debugPrint('⚠️ Error disconnecting device $deviceId: $disconnectError');
+      }
+
       return false;
     }
   }
 
-  /// Broadcast position data to all connected devices
+  /// Broadcast position data to all connected devices with real-time updates
   Future<bool> broadcastPositionData(PositionData data) async {
-    if (_connectedDevices.isEmpty) return false;
+    if (_connectedDevices.isEmpty) {
+      debugPrint('📡 No connected devices to broadcast position');
+      return false;
+    }
+
+    // Check if position changed significantly (> 1 meter or > 5 degrees heading change)
+    if (_lastBroadcastedPosition != null) {
+      final distance = _lastBroadcastedPosition!.distanceTo(data);
+      final lastHeading = _lastBroadcastedPosition!.heading ?? 0.0;
+      final currentHeading = data.heading ?? 0.0;
+      final headingDiff = (lastHeading - currentHeading).abs();
+
+      if (distance < 1.0 && headingDiff < 5.0) {
+        // Position hasn't changed significantly, skip broadcast to save battery
+        return true;
+      }
+    }
+
     try {
+      int successCount = 0;
       for (final entry in _positionCharacteristics.entries) {
         if (_connectedDevices.containsKey(entry.key)) {
-          await entry.value.write(data.toBytes());
+          try {
+            await entry.value.write(data.toBytes(), withoutResponse: true);
+            successCount++;
+          } catch (e) {
+            debugPrint('⚠️ Failed to broadcast to device ${entry.key}: $e');
+          }
         }
       }
-      return true;
+
+      if (successCount > 0) {
+        _lastBroadcastedPosition = data;
+        debugPrint('📤 Broadcasted position to $successCount devices');
+        return true;
+      }
+
+      return false;
     } catch (e) {
       debugPrint('MeshNetworkService: Error broadcasting position data: $e');
       return false;
     }
+  }
+
+  /// Update current position (for advertising)
+  void updateCurrentPosition(PositionData position) {
+    _currentPosition = position;
+    // Position will be advertised in the next advertising update cycle
+  }
+
+  /// Start automatic position broadcasting
+  void startPositionBroadcasting(Stream<PositionData> positionStream) {
+    positionStream.listen((position) async {
+      // Update advertising position
+      updateCurrentPosition(position);
+
+      // Legacy GATT broadcasting (kept for backward compatibility if connections exist)
+      if (_connectedDevices.isNotEmpty) {
+        await broadcastPositionData(position);
+      }
+    });
   }
 
   /// Handle device disconnection
@@ -410,8 +721,23 @@ class MeshNetworkService extends ChangeNotifier {
     _vehicleDataCharacteristics.remove(deviceId);
     _connectionSubscriptions[deviceId]?.cancel();
     _connectionSubscriptions.remove(deviceId);
+    _sharedPositions.remove(deviceId); // Remove shared position data
+
+    // Update the discovered device status to offline
+    if (_discoveredDevices.containsKey(deviceId)) {
+      final discoveredDevice = _discoveredDevices[deviceId]!;
+      _discoveredDevices[deviceId] = NetworkDevice(
+        deviceId: discoveredDevice.deviceId,
+        deviceName: discoveredDevice.deviceName,
+        lastSeen: DateTime.now(),
+        connectionStrength: discoveredDevice.connectionStrength,
+        status: NetworkDeviceStatus.offline, // Update status
+        capabilities: discoveredDevice.capabilities,
+      );
+    }
 
     _networkStatusController.add('Device disconnected');
+    notifyListeners(); // Update UI with new connection count
   }
 
   @override
@@ -434,22 +760,13 @@ class MeshNetworkService extends ChangeNotifier {
 
   Future<void> _generateServiceUuid() async {
     try {
-      final pkg = await PackageInfo.fromPlatform();
-      final packageName = (pkg.packageName.isNotEmpty)
-          ? pkg.packageName
-          : pkg.appName;
-      final uid = Uuid();
-      naviSafeServiceUuid = uid.v5(Uuid.NAMESPACE_URL, packageName);
+      // Use fixed UUID for all AuraDrive devices to ensure interoperability
       naviSafeServiceGuid = Guid(naviSafeServiceUuid);
       debugPrint(
-        'MeshNetworkService: Generated NaviSafe service UUID: $naviSafeServiceUuid from package: $packageName',
+        'MeshNetworkService: Using fixed NaviSafe service UUID: $naviSafeServiceUuid for AuraDrive compatibility',
       );
     } catch (e) {
-      naviSafeServiceUuid = '12345678-1234-1234-1234-123456789abc';
-      naviSafeServiceGuid = Guid(naviSafeServiceUuid);
-      debugPrint(
-        'MeshNetworkService: Failed to derive package name, using fallback UUID $naviSafeServiceUuid - error: $e',
-      );
+      debugPrint('MeshNetworkService: Error initializing service UUID: $e');
     }
   }
 }

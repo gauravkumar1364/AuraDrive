@@ -114,6 +114,14 @@ class MeshNetworkWidget extends StatelessWidget {
   }
 
   Widget _buildStats(MeshNetworkService meshService) {
+    final attemptingConnections = meshService.discoveredDevices.values
+        .where(
+          (d) =>
+              !meshService.sharedPositions.containsKey(d.deviceId) &&
+              d.capabilities.supportsRawGnss,
+        )
+        .length;
+
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -138,6 +146,45 @@ class MeshNetworkWidget extends StatelessWidget {
               ),
             ],
           ),
+          if (attemptingConnections > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue[900]!.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[400]!, width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.blue[300]!,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Auto-connecting to $attemptingConnections device${attemptingConnections > 1 ? 's' : ''}...',
+                      style: TextStyle(
+                        color: Colors.blue[200],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 16),
           Row(
             children: [
