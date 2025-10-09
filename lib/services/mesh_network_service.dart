@@ -110,10 +110,12 @@ class MeshNetworkService extends ChangeNotifier {
         // Longitude as float32 (4 bytes)
         buffer.setFloat32(4, position.longitude, Endian.little);
         // Speed as uint16 (2 bytes) - 0-655.35 km/h with 0.01 precision
-        final speed = position.speed ?? 0.0;
+        // Convert from m/s to km/h (multiply by 3.6)
+        final speedMps = position.speed ?? 0.0;
+        final speedKmh = speedMps * 3.6; // Convert m/s to km/h
         buffer.setUint16(
           8,
-          (speed * 100).round().clamp(0, 65535),
+          (speedKmh * 100).round().clamp(0, 65535),
           Endian.little,
         );
         // Heading as uint16 (2 bytes) - 0-359.99 degrees with 0.01 precision
@@ -125,7 +127,7 @@ class MeshNetworkService extends ChangeNotifier {
         );
 
         debugPrint(
-          '📡 Advertising position: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}',
+          '📡 Advertising position: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}, Speed: ${speedKmh.toStringAsFixed(1)} km/h (${speedMps.toStringAsFixed(2)} m/s)',
         );
       } else {
         // No position - send zeros
